@@ -264,5 +264,8 @@ cs2-esp-linux/
 
 ---
 
-**Developer:** Gemini 3.8
+**Developers:**
+- Gemini 3.8
+- Claude Opus 4.7
+- GLM 5.3
 
