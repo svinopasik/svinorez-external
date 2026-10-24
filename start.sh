@@ -30,6 +30,46 @@ fi
 
 rm -f /tmp/cs2esp.sock
 
+# Автодетект Hyprland: отключение размытия (blur) для прозрачного оверлея
+if [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ] || command -v hyprctl >/dev/null 2>&1; then
+    echo -e "${YELLOW}[*] Обнаружен Hyprland. Применяю правила отключения блюра для оверлея...${NC}"
+    
+    # 1. Применение правил на лету через hyprctl (Lua API и стандартный keyword)
+    hyprctl eval 'hl.window_rule({ match = { class = "cs2esp" }, no_blur = true, no_focus = true, no_initial_focus = true })' >/dev/null 2>&1 || true
+    hyprctl keyword windowrulev2 "noblur,class:^(cs2esp)$" >/dev/null 2>&1 || true
+    hyprctl keyword windowrulev2 "nofocus,class:^(cs2esp)$" >/dev/null 2>&1 || true
+    hyprctl keyword windowrulev2 "noinitialfocus,class:^(cs2esp)$" >/dev/null 2>&1 || true
+
+    # 2. Добавление постоянного правила в пользовательский конфиг, если его там нет
+    HYPR_LUA="$HOME/.config/hypr/hyprland.lua"
+    HYPR_CONF="$HOME/.config/hypr/hyprland.conf"
+
+    if [ -f "$HYPR_LUA" ]; then
+        if ! grep -q "cs2esp" "$HYPR_LUA"; then
+            echo -e "${GREEN}[+] Добавляю no_blur в $HYPR_LUA...${NC}"
+            cat << 'EOF' >> "$HYPR_LUA"
+
+-- svinorez-external: отключение блюра для оверлея
+hl.window_rule({ match = { class = "cs2esp" }, no_blur = true, no_focus = true, no_initial_focus = true })
+EOF
+            hyprctl reload >/dev/null 2>&1 || true
+        fi
+    elif [ -f "$HYPR_CONF" ]; then
+        if ! grep -q "cs2esp" "$HYPR_CONF"; then
+            echo -e "${GREEN}[+] Добавляю noblur в $HYPR_CONF...${NC}"
+            cat << 'EOF' >> "$HYPR_CONF"
+
+# svinorez-external: отключение блюра для оверлея
+windowrulev2 = noblur, class:^(cs2esp)$
+windowrulev2 = nofocus, class:^(cs2esp)$
+windowrulev2 = noinitialfocus, class:^(cs2esp)$
+EOF
+            hyprctl reload >/dev/null 2>&1 || true
+        fi
+    fi
+    echo -e "${GREEN}[✓] Правила Hyprland настроены (блюр отключён).${NC}\n"
+fi
+
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}   Запуск svinorez-external Daemon      ${NC}"
 echo -e "${BLUE}========================================${NC}"

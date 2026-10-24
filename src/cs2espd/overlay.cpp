@@ -124,6 +124,14 @@ bool Overlay::init(std::string& error) {
     XSetErrorHandler(x_error_handler);
     XSetIOErrorHandler(x_io_error_handler);
 
+    // Автоматическое отключение блюра в Hyprland при запуске оверлея
+    if (std::getenv("HYPRLAND_INSTANCE_SIGNATURE") != nullptr) {
+        ::system("hyprctl eval 'hl.window_rule({ match = { class = \"cs2esp\" }, no_blur = true, no_focus = true, no_initial_focus = true })' >/dev/null 2>&1");
+        ::system("hyprctl keyword windowrulev2 'noblur,class:^(cs2esp)$' >/dev/null 2>&1");
+        ::system("hyprctl keyword windowrulev2 'nofocus,class:^(cs2esp)$' >/dev/null 2>&1");
+        ::system("hyprctl keyword windowrulev2 'noinitialfocus,class:^(cs2esp)$' >/dev/null 2>&1");
+    }
+
     dpy_ = XOpenDisplay(nullptr);
     if (!dpy_) {
         error = "X11: cannot open display — нужен рабочий X-сервер или XWayland "
