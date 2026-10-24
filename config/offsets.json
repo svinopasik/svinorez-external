@@ -1,0 +1,45 @@
+{
+  "_comment": "Заполнено из cs2-dumper (linux ветка) + runtime-валидация по живой памяти. После патча — перегенерить (README).",
+
+  "rvas": {
+    "dwLocalPlayerController": 76586936,
+    "dwEntityList": 74206208,
+    "dwViewMatrix": 76846848
+  },
+
+  "entity_list": {
+    "pointer_size": 8,
+    "chunk_stride": 0,
+    "entity_stride": 112,
+    "chunk_shift": 9,
+    "index_mask": 32767
+  },
+
+  "pawn": {
+    "m_pGameSceneNode": 1184,
+    "m_iHealth": 1212,
+    "m_lifeState": 1220,
+    "m_iTeamNum": 1367,
+    "m_hController": 5188,
+    "m_iIDEntIndex": 17796,
+    "m_entitySpottedState": 11544,
+    "m_pAimPunchServices": 5408,
+    "m_iShotsFired": 11592
+  },
+
+  "aim_punch": {
+    "m_predictableBaseAngle": 80
+  },
+
+  "game_scene_node": {
+    "m_vecAbsOrigin": 200,
+    "m_modelState": 320,
+    "modelState_origin": 0,
+    "m_pBoneArray": 448
+  },
+
+  "controller": {
+    "m_hPawn": 2108,
+    "m_iszPlayerName": 2172
+  }
+}

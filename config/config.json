@@ -1,0 +1,45 @@
+{
+  "process_name": "cs2",
+  "game_module": "libclient.so",
+  "socket_path": "/tmp/cs2esp.sock",
+  "hotkey": "F8",
+  "fps_limit": 144,
+  "team_check": true,
+  "max_distance": 0,
+
+  "colors": {
+    "local": "#00FF00FF",
+    "enemy": "#FF4040FF",
+    "teammate": "#40A0FFFF"
+  },
+
+  "esp": {
+    "box_height_units": 70,
+    "box_width_ratio": 0.45,
+    "health_bar_width": 6,
+    "show_names": true,
+    "show_distance": true,
+    "show_status_text": true,
+    "show_skeleton": true,
+    "font": "DejaVu Sans:size=10",
+    "monitor": -1
+  },
+
+  "aimbot": {
+    "enabled": true,
+    "hotkey": "mouse1",
+    "bone": "chest",
+    "fov": 80,
+    "smooth": 15,
+    "team_check": true,
+    "visible_check": true
+  },
+
+  "triggerbot": {
+    "enabled": true,
+    "hotkey": "alt",
+    "pre_delay_ms": 50,
+    "post_delay_ms": 50,
+    "cooldown_ms": 300
+  }
+}

@@ -1,0 +1,117 @@
+#pragma once
+
+#include <cstdint>
+#include <string>
+#include <vector>
+
+namespace cs2esp {
+
+// offsets.json — RVA в клиентском модуле игры и смещения полей структур.
+// Значение 0 = «не заполнено»: демоны напишут в лог и не упадут.
+struct Offsets {
+    // RVA в клиентский модуль (libclient.so)
+    std::uint64_t rva_local_player_controller = 0;  // dwLocalPlayerController (pointer)
+    std::uint64_t rva_entity_list = 0;         // dwEntityList (указатель на CGameEntitySystem)
+    std::uint64_t rva_view_matrix = 0;         // dwViewMatrix
+
+    // Структура entity list (константы схемы, не смещения)
+    std::uint64_t el_pointer_size    = 8;    // sizeof записи указателя
+    std::uint64_t el_chunk_stride    = 0;    // смещение к bucket array внутри entity_system (0 если dwEntityList уже → bucket array)
+    std::uint64_t el_entity_stride   = 112;  // sizeof(CEntityIdentity)
+    std::uint64_t el_chunk_shift     = 9;    // index >> 9 → номер чанка
+    std::uint64_t el_index_mask      = 0x7FFF;
+
+    // Поля C_BasePlayerPawn
+    std::uint64_t pawn_p_game_scene_node = 0;   // m_pGameSceneNode
+    std::uint64_t pawn_health            = 0;   // m_iHealth (uint32)
+    std::uint64_t pawn_life_state        = 0;   // m_lifeState (uint8)
+    std::uint64_t pawn_team_num          = 0;   // m_iTeamNum
+    std::uint64_t pawn_controller_handle = 0;   // m_hController (CHandle)
+    std::uint64_t pawn_ident_index       = 17796; // m_iIDEntIndex (int32, crosshair entity ID)
+    std::uint64_t pawn_entity_spotted_state = 11544; // m_entitySpottedState (0x2D18)
+    std::uint64_t pawn_aim_punch_services = 5408;  // m_pAimPunchServices (0x1520)
+    std::uint64_t pawn_shots_fired       = 11592; // m_iShotsFired (0x2D48)
+    std::uint64_t aim_punch_angle        = 80;    // m_predictableBaseAngle (0x50 in AimPunchServices)
+
+    // Поля C_GameSceneNode
+    std::uint64_t node_origin        = 0;   // m_vecAbsOrigin (Vector3, абсолютные мировые координаты)
+    std::uint64_t node_model_state   = 0;   // m_modelState (альтернативный путь до origin)
+    std::uint64_t model_state_origin = 0;   // смещение внутри CModelState
+    std::uint64_t node_bone_array    = 448; // m_pBoneArray внутри C_GameSceneNode (0x1C0)
+
+    // Никнейм (опционально): CBasePlayerController::m_iszPlayerName (inline-строка)
+    std::uint64_t controller_name = 0;
+    // CBasePlayerController::m_hPawn (resolve local pawn через CHandle)
+    std::uint64_t controller_pawn_handle = 0;
+};
+
+struct Config {
+    std::string process_name = "cs2";           // имя процесса игры
+    std::string game_module  = "libclient.so";  // клиентский модуль
+    std::string socket_path  = "/tmp/cs2esp.sock";
+    std::string hotkey       = "F8";
+    int  fps_limit           = 144;
+    bool team_check          = true;            // не рисовать своих
+    float max_distance       = 0.0f;            // в игровых юнитах; 0 = без ограничения
+
+    // Цвета в формате #RRGGBBAA
+    std::string color_local    = "#00FF00FF";
+    std::string color_enemy    = "#FF4040FF";
+    std::string color_teammate = "#40A0FFFF";
+
+    struct Esp {
+        float box_height_units   = 70.0f;  // высота боксируемых в игровых юнитах
+        float box_width_ratio    = 0.45f;  // ширина = высота_в_пикселях * ratio
+        float health_bar_width   = 6.0f;   // px
+        bool  show_names         = true;   // если offsets заполнены
+        bool  show_distance      = true;
+        bool  show_status_text   = true;
+        bool  show_skeleton      = true;   // Рисовать скелеты игроков (кости 0..23)
+        std::string font         = "DejaVu Sans:size=10";
+        int   monitor            = -1;     // -1 = авто (следим за окном игры); иначе индекс XRR-монитора
+    } esp;
+
+    struct Aimbot {
+        bool enabled             = false;
+        std::string hotkey       = "always"; // "always", "alt", "shift", "ctrl", "caps", "c", "v", "x"
+        std::string bone         = "head";   // "head" (кость 7) или "chest" (кость 5)
+        float fov                = 120.0f;   // радиус захвата FOV в пикселях
+        float smooth             = 4.0f;     // фактор сглаживания доводки мыши
+        bool team_check          = true;     // целиться только во врагов
+        bool visible_check       = true;     // не целиться через стены (проверка видимости)
+    } aimbot;
+
+    struct Triggerbot {
+        bool enabled             = false;
+        std::string hotkey       = "always"; // "always", "ALT", "SHIFT", "X", etc.
+        int pre_delay_ms         = 10;       // задержка до выстрела (мс)
+        int post_delay_ms        = 20;       // длительность удержания клика (мс)
+        int cooldown_ms          = 120;      // кулдаун между выстрелами (мс)
+    } triggerbot;
+
+    struct Rcs {
+        bool enabled             = true;
+        float scale_x            = 1.0f;     // множитель компенсации по горизонтали (1.0 = 100%)
+        float scale_y            = 1.0f;     // множитель компенсации по вертикали (1.0 = 100%)
+        float sensitivity        = 2.0f;     // внутриигровая чувствительность мыши в CS2
+    } rcs;
+
+    Offsets offsets;
+};
+
+// Загрузка config.json + offsets.json; при ошибке пишет в error
+// строку с именем файла и проблемным полем.
+bool load_config(const std::string& config_file,
+                 const std::string& offsets_file,
+                 Config& out,
+                 std::string& error);
+
+// Сохранение config.json на диск
+bool save_config(const std::string& config_file,
+                 const Config& cfg,
+                 std::string& error);
+
+// Незаполненные (0 или null) поля offsets в виде человекочитаемых путей JSON.
+std::vector<std::string> missing_offsets(const Offsets& o);
+
+} // namespace cs2esp
