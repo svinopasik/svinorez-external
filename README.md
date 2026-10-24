@@ -1,4 +1,4 @@
-# cs2-esp-linux
+# cs2-linux-hack
 
 > [!WARNING]
 > **ПРОЕКТ ЗАБРОШЕН / UNMAINTAINED**

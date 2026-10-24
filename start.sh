@@ -31,7 +31,7 @@ fi
 rm -f /tmp/cs2esp.sock
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}   Запуск CS2 Linux External Daemon    ${NC}"
+echo -e "${BLUE}   Запуск cs2-linux-hack Daemon         ${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo -e "Горячие клавиши в игре:"
 echo -e "  - ${GREEN}[INSERT]${NC} : Открыть / закрыть интерактивное GUI меню"

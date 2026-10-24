@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(cs2-esp-linux
-    VERSION 0.1.0
-    DESCRIPTION "external ESP for CS2 (Linux, XWayland)"
+project(cs2-linux-hack
+    VERSION 1.0.0
+    DESCRIPTION "External CS2 Hack for Linux (ESP, Aimbot, Triggerbot, RCS, GUI)"
     LANGUAGES CXX
 )
 
