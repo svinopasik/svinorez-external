@@ -1,4 +1,4 @@
-# cs2-linux-hack
+# svinorez-external
 
 > [!WARNING]
 > **ПРОЕКТ ЗАБРОШЕН / UNMAINTAINED**

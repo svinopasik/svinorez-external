@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(cs2-linux-hack
+project(svinorez-external
     VERSION 1.0.0
-    DESCRIPTION "External CS2 Hack for Linux (ESP, Aimbot, Triggerbot, RCS, GUI)"
+    DESCRIPTION "External Linux tool for CS2 (ESP, Aimbot, Triggerbot, RCS, GUI)"
     LANGUAGES CXX
 )
 
