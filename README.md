@@ -259,3 +259,8 @@ cs2-esp-linux/
 | `top-level must be an object` и т.п. | битый JSON в конфиге |
 | `offsets.json: rvas.* == 0 ...` | offsets не заполнены — см. раздел выше |
 | `waiting for cs2` | игра не запущена; это штатное сообщение |
+
+---
+
+**Developer:** Gemini 3.8
+
