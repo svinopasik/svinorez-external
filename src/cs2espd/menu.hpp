@@ -48,6 +48,20 @@ public:
     void handle_mouse_move(int x, int y);
     void handle_mouse_up(int button, int x, int y);
 
+    // Интерактивный захват клавиш
+    enum class BindTarget {
+        Unset = 0,
+        EspToggle,
+        AimbotKey,
+        TriggerbotKey
+    };
+
+    bool is_waiting_for_key() const { return waiting_bind_target_ != BindTarget::Unset; }
+    void cancel_key_bind();
+    bool handle_key_bind_event(KeySym sym, unsigned int keycode);
+    bool handle_mouse_bind_event(unsigned int button);
+    bool can_consume_mouse_bind() const { return arm_mouse_bind_; }
+
     void draw(Display* dpy, Window win, GC gc, XftDraw* xft_draw, XftFont* font,
               Visual* visual, Colormap cmap, int screen_w, int screen_h);
 
@@ -76,6 +90,9 @@ private:
     int mouse_y_ = -1;
     bool mouse_down_ = false;
     int dragging_slider_idx_ = -1;
+
+    BindTarget waiting_bind_target_ = BindTarget::Unset;
+    bool arm_mouse_bind_ = false;
 
     std::string status_msg_;
     std::chrono::steady_clock::time_point status_time_{};
@@ -118,6 +135,8 @@ private:
         float progress = 0.0f;
         bool checked = false;
         bool is_danger = false;
+        bool is_waiting = false;
+        BindTarget bind_target = BindTarget::Unset;
 
         // Bounding box for mouse clicks/drags
         int bx = 0, by = 0, bw = 0, bh = 0;

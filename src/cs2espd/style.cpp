@@ -290,24 +290,42 @@ void UIDrawList::draw_custom_button(int x, int y, int w, int h,
 
 void UIDrawList::draw_custom_keybind(int x, int y, int w, int h,
                                      const std::string& label, const std::string& key_str,
+                                     bool is_waiting_for_input,
                                      bool is_hovered, bool is_selected) {
-    if (is_selected || is_hovered) {
+    if (is_waiting_for_input) {
+        add_rect_filled(x, y, w, h, argb(0x50, 0x4A, 0x14, 0x1C));
+    } else if (is_selected || is_hovered) {
         add_rect_filled(x, y, w, h, argb(0x50, 0x2A, 0x2A, 0x38));
     }
 
-    XftColor* lbl_col = (is_selected || is_hovered) ? col_white : col_gray;
+    XftColor* lbl_col = (is_waiting_for_input || is_selected || is_hovered) ? col_white : col_gray;
     add_text(x + 10, y + (h + font_->ascent - font_->descent) / 2, lbl_col, label);
 
-    std::string badge = "[ " + key_str + " ]";
+    std::string badge;
+    if (is_waiting_for_input) {
+        badge = "[ PRESS KEY... ]";
+    } else {
+        badge = "[ " + key_str + " ]";
+    }
+
     int bw = 0, bh = 0;
     get_text_size(badge, bw, bh);
 
     int badge_x = x + w - bw - 18;
     int badge_y = y + (h - 20) / 2;
-    add_rect_filled(badge_x, badge_y, bw + 10, 20, argb(0xFF, 0x25, 0x12, 0x16));
-    add_rect(badge_x, badge_y, bw + 10, 20, style_.Colors[UICol_SidebarIndicator], 1);
 
-    add_text_centered(badge_x, badge_y, bw + 10, 20, col_crimson, badge);
+    if (is_waiting_for_input) {
+        // Bright active red background for badge with white text
+        add_rect_filled(badge_x, badge_y, bw + 10, 20, style_.Colors[UICol_SidebarIndicator]);
+        add_rect(badge_x, badge_y, bw + 10, 20, argb(0xFF, 0xFF, 0x55, 0x55), 1);
+        add_text_centered(badge_x, badge_y, bw + 10, 20, col_white, badge);
+    } else {
+        add_rect_filled(badge_x, badge_y, bw + 10, 20, argb(0xFF, 0x25, 0x12, 0x16));
+        unsigned long border_col = (is_hovered || is_selected) ? argb(0xFF, 0xE5, 0x39, 0x35)
+                                                               : style_.Colors[UICol_SidebarIndicator];
+        add_rect(badge_x, badge_y, bw + 10, 20, border_col, 1);
+        add_text_centered(badge_x, badge_y, bw + 10, 20, col_crimson, badge);
+    }
 }
 
 } // namespace cs2esp

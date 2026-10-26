@@ -21,21 +21,47 @@ int resolve_hardware_keycode(Display* dpy, const std::string& name) {
     if (s == "space") return 65;
     if (s == "tab") return 23;
     if (s == "insert" || s == "ins") return 118;
+    if (s == "delete" || s == "del") return 119;
+    if (s == "return" || s == "enter") return 36;
+    if (s == "escape" || s == "esc") return 9;
 
+    if (s == "a") return 38;
+    if (s == "b") return 56;
     if (s == "c") return 54;
-    if (s == "v") return 55;
-    if (s == "x") return 53;
-    if (s == "z") return 52;
+    if (s == "d") return 40;
     if (s == "e") return 26;
+    if (s == "f") return 41;
+    if (s == "g") return 42;
+    if (s == "h") return 43;
+    if (s == "i") return 31;
+    if (s == "j") return 44;
+    if (s == "k") return 45;
+    if (s == "l") return 46;
+    if (s == "m") return 58;
+    if (s == "n") return 57;
+    if (s == "o") return 32;
+    if (s == "p") return 33;
     if (s == "q") return 24;
     if (s == "r") return 27;
-    if (s == "f") return 41;
+    if (s == "s") return 39;
+    if (s == "t") return 28;
+    if (s == "u") return 30;
+    if (s == "v") return 55;
+    if (s == "w") return 25;
+    if (s == "x") return 53;
+    if (s == "y") return 29;
+    if (s == "z") return 52;
 
     if (s == "1") return 10;
     if (s == "2") return 11;
     if (s == "3") return 12;
     if (s == "4") return 13;
     if (s == "5") return 14;
+    if (s == "6") return 15;
+    if (s == "7") return 16;
+    if (s == "8") return 17;
+    if (s == "9") return 18;
+    if (s == "0") return 19;
 
     if (s == "f1") return 67;
     if (s == "f2") return 68;
@@ -58,6 +84,113 @@ int resolve_hardware_keycode(Display* dpy, const std::string& name) {
         }
     }
     return 0;
+}
+
+std::string get_key_name(KeySym sym, unsigned int keycode) {
+    if (sym == XK_Escape) return "ESC";
+    if (sym == XK_Return || sym == XK_KP_Enter) return "ENTER";
+    if (sym == XK_space) return "SPACE";
+    if (sym == XK_Tab || sym == XK_ISO_Left_Tab) return "TAB";
+    if (sym == XK_BackSpace) return "BACKSPACE";
+    if (sym == XK_Insert || sym == XK_KP_Insert) return "INSERT";
+    if (sym == XK_Delete || sym == XK_KP_Delete) return "DELETE";
+    if (sym == XK_Home || sym == XK_KP_Home) return "HOME";
+    if (sym == XK_End || sym == XK_KP_End) return "END";
+    if (sym == XK_Page_Up || sym == XK_KP_Page_Up) return "PGUP";
+    if (sym == XK_Page_Down || sym == XK_KP_Page_Down) return "PGDN";
+    if (sym == XK_Caps_Lock) return "CAPS";
+    if (sym == XK_Shift_L || sym == XK_Shift_R) return "SHIFT";
+    if (sym == XK_Control_L || sym == XK_Control_R) return "CTRL";
+    if (sym == XK_Alt_L || sym == XK_Alt_R) return "ALT";
+    if (sym == XK_Super_L || sym == XK_Super_R) return "SUPER";
+
+    if (sym >= XK_F1 && sym <= XK_F12) {
+        return "F" + std::to_string(static_cast<int>(sym - XK_F1 + 1));
+    }
+
+    // Physical keycode lookup: guarantees correct Latin name even if active layout is Cyrillic
+    switch (keycode) {
+        case 38: return "A";
+        case 56: return "B";
+        case 54: return "C";
+        case 40: return "D";
+        case 26: return "E";
+        case 41: return "F";
+        case 42: return "G";
+        case 43: return "H";
+        case 31: return "I";
+        case 44: return "J";
+        case 45: return "K";
+        case 46: return "L";
+        case 58: return "M";
+        case 57: return "N";
+        case 32: return "O";
+        case 33: return "P";
+        case 24: return "Q";
+        case 27: return "R";
+        case 39: return "S";
+        case 28: return "T";
+        case 30: return "U";
+        case 55: return "V";
+        case 25: return "W";
+        case 53: return "X";
+        case 29: return "Y";
+        case 52: return "Z";
+        case 10: return "1";
+        case 11: return "2";
+        case 12: return "3";
+        case 13: return "4";
+        case 14: return "5";
+        case 15: return "6";
+        case 16: return "7";
+        case 17: return "8";
+        case 18: return "9";
+        case 19: return "0";
+        case 64: case 108: return "ALT";
+        case 50: case 62: return "SHIFT";
+        case 37: case 105: return "CTRL";
+        case 65: return "SPACE";
+        case 66: return "CAPS";
+        case 23: return "TAB";
+        case 118: return "INSERT";
+        case 119: return "DELETE";
+        default: break;
+    }
+
+    if (sym >= XK_a && sym <= XK_z) {
+        return std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(sym))));
+    }
+    if (sym >= XK_A && sym <= XK_Z) {
+        return std::string(1, static_cast<char>(sym));
+    }
+    if (sym >= XK_0 && sym <= XK_9) {
+        return std::string(1, static_cast<char>(sym));
+    }
+
+    const char* str = XKeysymToString(sym);
+    if (str && *str) {
+        std::string res(str);
+        for (char& c : res) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        return res;
+    }
+
+    if (keycode != 0) {
+        return "KEY" + std::to_string(keycode);
+    }
+    return "NONE";
+}
+
+std::string get_mouse_button_name(unsigned int button) {
+    switch (button) {
+        case 1: return "MOUSE1";
+        case 2: return "MOUSE3"; // Middle click in X11
+        case 3: return "MOUSE2"; // Right click in X11
+        case 4: return "MOUSE4";
+        case 5: return "MOUSE5";
+        case 8: return "MOUSE4"; // Side thumb back
+        case 9: return "MOUSE5"; // Side thumb forward
+        default: return "MOUSE" + std::to_string(button);
+    }
 }
 
 } // namespace cs2esp

@@ -475,6 +475,10 @@ void Overlay::create_window() {
 }
 
 void Overlay::destroy_window() {
+    if (keyboard_grabbed_for_bind_) {
+        XUngrabKeyboard(dpy_, CurrentTime);
+        keyboard_grabbed_for_bind_ = false;
+    }
     if (xft_draw_) {
         XftDrawDestroy(xft_draw_);
         xft_draw_ = nullptr;
@@ -576,6 +580,10 @@ void Overlay::ungrab_menu_navigation() {
                 XUngrabKey(dpy_, kc, m, root_);
             }
         }
+    }
+    if (keyboard_grabbed_for_bind_) {
+        XUngrabKeyboard(dpy_, CurrentTime);
+        keyboard_grabbed_for_bind_ = false;
     }
     menu_nav_grabbed_ = false;
 }
@@ -773,12 +781,33 @@ bool Overlay::frame(const std::vector<ScreenBox>& boxes, bool esp_on, bool aimbo
         }
     }
 
+    if (menu_.is_open() && menu_.is_waiting_for_key()) {
+        if (!keyboard_grabbed_for_bind_) {
+            XGrabKeyboard(dpy_, win_, True, GrabModeAsync, GrabModeAsync, CurrentTime);
+            keyboard_grabbed_for_bind_ = true;
+        }
+    } else {
+        if (keyboard_grabbed_for_bind_) {
+            XUngrabKeyboard(dpy_, CurrentTime);
+            keyboard_grabbed_for_bind_ = false;
+        }
+    }
+
     // события X: hotkey, expose, menu input, root resize
     while (XPending(dpy_) > 0) {
         XEvent ev;
         XNextEvent(dpy_, &ev);
         if (ev.type == KeyPress) {
             KeySym sym = XLookupKeysym(&ev.xkey, 0);
+            if (menu_.is_open() && menu_.is_waiting_for_key()) {
+                menu_.handle_key_bind_event(sym, ev.xkey.keycode);
+                if (!menu_.is_waiting_for_key() && keyboard_grabbed_for_bind_) {
+                    XUngrabKeyboard(dpy_, CurrentTime);
+                    keyboard_grabbed_for_bind_ = false;
+                }
+                continue;
+            }
+
             if ((hotkey_insert_keycode_ != 0 && ev.xkey.keycode == hotkey_insert_keycode_) ||
                 sym == XK_Insert) {
                 menu_.toggle();
@@ -793,6 +822,14 @@ bool Overlay::frame(const std::vector<ScreenBox>& boxes, bool esp_on, bool aimbo
                 menu_.handle_key(sym);
             }
         } else if (ev.type == ButtonPress && menu_.is_open()) {
+            if (menu_.is_waiting_for_key() && menu_.can_consume_mouse_bind()) {
+                menu_.handle_mouse_bind_event(ev.xbutton.button);
+                if (!menu_.is_waiting_for_key() && keyboard_grabbed_for_bind_) {
+                    XUngrabKeyboard(dpy_, CurrentTime);
+                    keyboard_grabbed_for_bind_ = false;
+                }
+                continue;
+            }
             menu_.handle_click(ev.xbutton.button, ev.xbutton.x, ev.xbutton.y);
         } else if (ev.type == ButtonRelease && menu_.is_open()) {
             menu_.handle_mouse_up(ev.xbutton.button, ev.xbutton.x, ev.xbutton.y);

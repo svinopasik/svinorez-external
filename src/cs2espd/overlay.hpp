@@ -93,6 +93,7 @@ private:
 
     KeyCode hotkey_insert_keycode_ = 0;
     bool menu_nav_grabbed_ = false;
+    bool keyboard_grabbed_for_bind_ = false;
 
     std::atomic<bool> toggle_flag_{false};
     std::atomic<bool> menu_toggle_req_{false};

@@ -70,6 +70,16 @@ void Aimbot::update_hotkey() {
         is_mouse_hotkey_ = true;
         mouse_mask_ = Button2Mask;
         hotkey_code_ = 0;
+    } else if (hk == "mouse4") {
+        always_active_ = false;
+        is_mouse_hotkey_ = true;
+        mouse_mask_ = Button4Mask;
+        hotkey_code_ = 0;
+    } else if (hk == "mouse5") {
+        always_active_ = false;
+        is_mouse_hotkey_ = true;
+        mouse_mask_ = Button5Mask;
+        hotkey_code_ = 0;
     } else {
         always_active_ = false;
         is_mouse_hotkey_ = false;

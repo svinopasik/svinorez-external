@@ -119,6 +119,7 @@ public:
 
     void draw_custom_keybind(int x, int y, int w, int h,
                              const std::string& label, const std::string& key_str,
+                             bool is_waiting_for_input,
                              bool is_hovered, bool is_selected);
 
     const ImGuiStyle& style() const { return style_; }

@@ -1,5 +1,6 @@
 #include "menu.hpp"
 
+#include "common/keymap.hpp"
 #include "common/log.hpp"
 
 #include <X11/keysym.h>
@@ -7,12 +8,19 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 
 namespace cs2esp {
 namespace {
+
+inline std::string get_display_key(const std::string& key) {
+    std::string s = key;
+    for (char& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    return s.empty() ? "NONE" : s;
+}
 
 const std::vector<std::string> kAimbotHotkeys = {
     "always", "alt", "shift", "ctrl", "caps", "c", "v", "x", "z", "mouse1", "mouse2"
@@ -104,6 +112,82 @@ void Menu::open() {
 void Menu::close() {
     open_ = false;
     dragging_slider_idx_ = -1;
+    waiting_bind_target_ = BindTarget::Unset;
+    arm_mouse_bind_ = false;
+}
+
+void Menu::cancel_key_bind() {
+    waiting_bind_target_ = BindTarget::Unset;
+    arm_mouse_bind_ = false;
+    status_msg_ = "Key bind cancelled";
+    status_time_ = std::chrono::steady_clock::now();
+}
+
+bool Menu::handle_key_bind_event(KeySym sym, unsigned int keycode) {
+    if (waiting_bind_target_ == BindTarget::Unset) return false;
+    if (sym == XK_Escape) {
+        cancel_key_bind();
+        return true;
+    }
+
+    std::string name = get_key_name(sym, keycode);
+    if (name.empty()) return true;
+
+    std::string target_desc;
+    if (waiting_bind_target_ == BindTarget::EspToggle) {
+        cfg_.hotkey = name;
+        target_desc = "ESP Toggle";
+    } else if (waiting_bind_target_ == BindTarget::AimbotKey) {
+        cfg_.aimbot.hotkey = name;
+        target_desc = "Aimbot Key";
+    } else if (waiting_bind_target_ == BindTarget::TriggerbotKey) {
+        cfg_.triggerbot.hotkey = name;
+        target_desc = "Triggerbot Key";
+    }
+
+    std::string err;
+    if (save(err)) {
+        status_msg_ = target_desc + " bound to [" + get_display_key(name) + "] and saved";
+    } else {
+        status_msg_ = target_desc + " bound to [" + get_display_key(name) + "] (save failed: " + err + ")";
+    }
+    status_time_ = std::chrono::steady_clock::now();
+
+    waiting_bind_target_ = BindTarget::Unset;
+    arm_mouse_bind_ = false;
+    return true;
+}
+
+bool Menu::handle_mouse_bind_event(unsigned int button) {
+    if (waiting_bind_target_ == BindTarget::Unset) return false;
+    if (!arm_mouse_bind_) return false;
+
+    std::string name = get_mouse_button_name(button);
+    if (name.empty()) return false;
+
+    std::string target_desc;
+    if (waiting_bind_target_ == BindTarget::EspToggle) {
+        cfg_.hotkey = name;
+        target_desc = "ESP Toggle";
+    } else if (waiting_bind_target_ == BindTarget::AimbotKey) {
+        cfg_.aimbot.hotkey = name;
+        target_desc = "Aimbot Key";
+    } else if (waiting_bind_target_ == BindTarget::TriggerbotKey) {
+        cfg_.triggerbot.hotkey = name;
+        target_desc = "Triggerbot Key";
+    }
+
+    std::string err;
+    if (save(err)) {
+        status_msg_ = target_desc + " bound to [" + get_display_key(name) + "] and saved";
+    } else {
+        status_msg_ = target_desc + " bound to [" + get_display_key(name) + "] (save failed: " + err + ")";
+    }
+    status_time_ = std::chrono::steady_clock::now();
+
+    waiting_bind_target_ = BindTarget::Unset;
+    arm_mouse_bind_ = false;
+    return true;
 }
 
 XRectangle Menu::rect(int screen_w, int screen_h) const {
@@ -407,13 +491,11 @@ void Menu::build_items_for_current_view() {
             {
                 RuntimeItem it;
                 it.card_col = 0;
-                it.type = ItemType::SelectorStr;
-                it.label = "Activation Hotkey";
-                it.val_str = cfg_.aimbot.hotkey;
-                it.on_cycle = [this](int dir) {
-                    if (dir > 0) cycle_next(kAimbotHotkeys, cfg_.aimbot.hotkey);
-                    else cycle_prev(kAimbotHotkeys, cfg_.aimbot.hotkey);
-                };
+                it.type = ItemType::Keybind;
+                it.label = "Activation Key";
+                it.val_str = get_display_key(cfg_.aimbot.hotkey);
+                it.bind_target = BindTarget::AimbotKey;
+                it.is_waiting = (waiting_bind_target_ == BindTarget::AimbotKey);
                 active_items_.push_back(it);
             }
             {
@@ -450,7 +532,9 @@ void Menu::build_items_for_current_view() {
                 it.card_col = 1;
                 it.type = ItemType::Keybind;
                 it.label = "Current Aim Key";
-                it.val_str = cfg_.aimbot.hotkey;
+                it.val_str = get_display_key(cfg_.aimbot.hotkey);
+                it.bind_target = BindTarget::AimbotKey;
+                it.is_waiting = (waiting_bind_target_ == BindTarget::AimbotKey);
                 active_items_.push_back(it);
             }
             {
@@ -535,13 +619,11 @@ void Menu::build_items_for_current_view() {
             {
                 RuntimeItem it;
                 it.card_col = 0;
-                it.type = ItemType::SelectorStr;
-                it.label = "Activation Hotkey";
-                it.val_str = cfg_.triggerbot.hotkey;
-                it.on_cycle = [this](int dir) {
-                    if (dir > 0) cycle_next(kTriggerHotkeys, cfg_.triggerbot.hotkey);
-                    else cycle_prev(kTriggerHotkeys, cfg_.triggerbot.hotkey);
-                };
+                it.type = ItemType::Keybind;
+                it.label = "Activation Key";
+                it.val_str = get_display_key(cfg_.triggerbot.hotkey);
+                it.bind_target = BindTarget::TriggerbotKey;
+                it.is_waiting = (waiting_bind_target_ == BindTarget::TriggerbotKey);
                 active_items_.push_back(it);
             }
             {
@@ -569,7 +651,9 @@ void Menu::build_items_for_current_view() {
                 it.card_col = 1;
                 it.type = ItemType::Keybind;
                 it.label = "Trigger Hotkey";
-                it.val_str = cfg_.triggerbot.hotkey;
+                it.val_str = get_display_key(cfg_.triggerbot.hotkey);
+                it.bind_target = BindTarget::TriggerbotKey;
+                it.is_waiting = (waiting_bind_target_ == BindTarget::TriggerbotKey);
                 active_items_.push_back(it);
             }
             {
@@ -665,42 +749,37 @@ void Menu::build_items_for_current_view() {
                 it.type = ItemType::Keybind;
                 it.label = "Menu Toggle Key";
                 it.val_str = "INSERT";
+                it.bind_target = BindTarget::Unset;
                 active_items_.push_back(it);
             }
             {
                 RuntimeItem it;
                 it.card_col = 0;
-                it.type = ItemType::SelectorStr;
+                it.type = ItemType::Keybind;
                 it.label = "ESP Quick Toggle";
-                it.val_str = cfg_.hotkey;
-                it.on_cycle = [this](int dir) {
-                    if (dir > 0) cycle_next(kEspHotkeys, cfg_.hotkey);
-                    else cycle_prev(kEspHotkeys, cfg_.hotkey);
-                };
+                it.val_str = get_display_key(cfg_.hotkey);
+                it.bind_target = BindTarget::EspToggle;
+                it.is_waiting = (waiting_bind_target_ == BindTarget::EspToggle);
                 active_items_.push_back(it);
             }
             {
                 RuntimeItem it;
                 it.card_col = 0;
-                it.type = ItemType::SelectorStr;
+                it.type = ItemType::Keybind;
                 it.label = "Aimbot Key";
-                it.val_str = cfg_.aimbot.hotkey;
-                it.on_cycle = [this](int dir) {
-                    if (dir > 0) cycle_next(kAimbotHotkeys, cfg_.aimbot.hotkey);
-                    else cycle_prev(kAimbotHotkeys, cfg_.aimbot.hotkey);
-                };
+                it.val_str = get_display_key(cfg_.aimbot.hotkey);
+                it.bind_target = BindTarget::AimbotKey;
+                it.is_waiting = (waiting_bind_target_ == BindTarget::AimbotKey);
                 active_items_.push_back(it);
             }
             {
                 RuntimeItem it;
                 it.card_col = 0;
-                it.type = ItemType::SelectorStr;
+                it.type = ItemType::Keybind;
                 it.label = "Triggerbot Key";
-                it.val_str = cfg_.triggerbot.hotkey;
-                it.on_cycle = [this](int dir) {
-                    if (dir > 0) cycle_next(kTriggerHotkeys, cfg_.triggerbot.hotkey);
-                    else cycle_prev(kTriggerHotkeys, cfg_.triggerbot.hotkey);
-                };
+                it.val_str = get_display_key(cfg_.triggerbot.hotkey);
+                it.bind_target = BindTarget::TriggerbotKey;
+                it.is_waiting = (waiting_bind_target_ == BindTarget::TriggerbotKey);
                 active_items_.push_back(it);
             }
 
@@ -798,6 +877,7 @@ int Menu::current_item_count() const {
 }
 
 void Menu::select_next_item() {
+    build_items_for_current_view();
     const int count = current_item_count();
     if (count > 0) {
         selected_item_ = (selected_item_ + 1) % count;
@@ -805,6 +885,7 @@ void Menu::select_next_item() {
 }
 
 void Menu::select_prev_item() {
+    build_items_for_current_view();
     const int count = current_item_count();
     if (count > 0) {
         selected_item_ = (selected_item_ - 1 + count) % count;
@@ -816,6 +897,17 @@ void Menu::item_activate() {
     if (selected_item_ < 0 || selected_item_ >= current_item_count()) return;
 
     auto& it = active_items_[selected_item_];
+    if (it.type == ItemType::Keybind && it.bind_target != BindTarget::Unset) {
+        if (waiting_bind_target_ == it.bind_target) {
+            cancel_key_bind();
+        } else {
+            waiting_bind_target_ = it.bind_target;
+            arm_mouse_bind_ = false;
+            status_msg_ = "Press any key or mouse button (Esc to cancel)...";
+            status_time_ = std::chrono::steady_clock::now();
+        }
+        return;
+    }
     if (it.on_toggle) it.on_toggle();
     else if (it.on_click) it.on_click();
     else if (it.on_cycle) it.on_cycle(1);
@@ -883,6 +975,9 @@ void Menu::handle_mouse_move(int x, int y) {
 void Menu::handle_mouse_up(int /*button*/, int /*x*/, int /*y*/) {
     mouse_down_ = false;
     dragging_slider_idx_ = -1;
+    if (waiting_bind_target_ != BindTarget::Unset) {
+        arm_mouse_bind_ = true;
+    }
 }
 
 bool Menu::handle_click(int button, int x, int y) {
@@ -953,6 +1048,17 @@ bool Menu::handle_click(int button, int x, int y) {
                 }
             } else if (it.type == ItemType::Button) {
                 if (it.on_click) it.on_click();
+            } else if (it.type == ItemType::Keybind) {
+                if (it.bind_target != BindTarget::Unset) {
+                    if (waiting_bind_target_ == it.bind_target) {
+                        cancel_key_bind();
+                    } else {
+                        waiting_bind_target_ = it.bind_target;
+                        arm_mouse_bind_ = false;
+                        status_msg_ = "Press any key or mouse button (Esc to cancel)...";
+                        status_time_ = std::chrono::steady_clock::now();
+                    }
+                }
             }
             return true;
         }
@@ -1137,7 +1243,7 @@ void Menu::draw(Display* dpy, Window win, GC gc, XftDraw* xft_draw, XftFont* fon
         } else if (it.type == ItemType::Button) {
             draw.draw_custom_button(it.bx, it.by, it.bw, it.bh, it.label, is_hov, is_sel, it.is_danger);
         } else if (it.type == ItemType::Keybind) {
-            draw.draw_custom_keybind(it.bx, it.by, it.bw, it.bh, it.label, it.val_str, is_hov, is_sel);
+            draw.draw_custom_keybind(it.bx, it.by, it.bw, it.bh, it.label, it.val_str, it.is_waiting, is_hov, is_sel);
         }
 
         next_y[col] += row_h + 4;
