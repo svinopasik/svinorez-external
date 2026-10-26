@@ -81,9 +81,9 @@ std::string read_cmdline_name(int pid) {
     return basename_of(trim(tok));
 }
 
-// Ядро чтения: исключительно прямой системный вызов process_vm_readv.
-// Никаких открытых дескрипторов /proc/<pid>/mem в /proc/self/fd/ (гарантия скрытности от VAC).
-bool read_full(int /*fd*/, int pid, std::uint64_t address, void* buffer, std::size_t size) {
+// Direct syscall memory reading via process_vm_readv.
+// Avoids retaining open file descriptors to /proc/<pid>/mem.
+bool read_full(int pid, std::uint64_t address, void* buffer, std::size_t size) {
     if (pid <= 0 || address == 0 || size == 0) return false;
 
     struct iovec local{ buffer, size };
@@ -99,10 +99,6 @@ ProcessMemory::~ProcessMemory() {
 }
 
 void ProcessMemory::close() {
-    if (fd_ != -1) {
-        ::close(fd_);
-        fd_ = -1;
-    }
     pid_ = 0;
 }
 
@@ -154,22 +150,18 @@ bool ProcessMemory::open(const std::string& process_name, std::string& error) {
 
     pid_ = matches.front();
 
-    // Проверяем доступность прямого syscall process_vm_readv для целевого PID.
-    // Прямой syscall не создает дескрипторов в /proc/self/fd/.
+    // Verify process_vm_readv accessibility for target PID.
     char probe_buf[8];
     struct iovec local{ probe_buf, sizeof(probe_buf) };
     struct iovec remote{ reinterpret_cast<void*>(0x10000), sizeof(probe_buf) };
     errno = 0;
     ::process_vm_readv(pid_, &local, 1, &remote, 1, 0);
     if (errno != EPERM && errno != ESRCH) {
-        fd_ = -1; // Скрытый режим: прямой syscall без постоянного fd
         error.clear();
         return true;
     }
 
-    // Для предотвращения детекта античитом через чтение /proc/self/fd
-    // мы НЕ открываем /proc/<pid>/mem fallback.
-    error = "process_vm_readv denied (EPERM). To protect your account from /proc/self/fd detection, fallback to /proc/<pid>/mem is disabled. Run 'echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope' or 'sudo setcap cap_sys_ptrace=eip <binary>'";
+    error = "process_vm_readv denied (EPERM): check kernel.yama.ptrace_scope or setcap cap_sys_ptrace";
     pid_ = 0;
     return false;
 }
@@ -213,7 +205,7 @@ bool ProcessMemory::read(std::uint64_t address, void* buffer, std::size_t size,
         error = "memory: process not attached";
         return false;
     }
-    if (!read_full(fd_, pid_, address, buffer, size)) {
+    if (!read_full(pid_, address, buffer, size)) {
         error = "read failed at " + hex_addr(address) + " size " + std::to_string(size) +
                 " (pid=" + std::to_string(pid_) + "): " + errno_text(errno);
         return false;
@@ -223,7 +215,7 @@ bool ProcessMemory::read(std::uint64_t address, void* buffer, std::size_t size,
 
 bool ProcessMemory::read_quiet(std::uint64_t address, void* buffer, std::size_t size) const {
     if (pid_ <= 0 || address == 0 || size == 0) return false;
-    return read_full(fd_, pid_, address, buffer, size);
+    return read_full(pid_, address, buffer, size);
 }
 
 bool ProcessMemory::process_alive() const {
