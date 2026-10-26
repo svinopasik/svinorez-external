@@ -40,12 +40,15 @@ bool Game::read_pawn_meta(std::uint64_t pawn, int& health, int& team, bool& aliv
     if (pawn == 0 || o.pawn_health == 0 || o.pawn_life_state == 0 || o.pawn_team_num == 0) {
         return false;
     }
-    const std::uint32_t hp = mem_.read_or<std::uint32_t>(pawn + o.pawn_health, 0);
-    const std::uint8_t  ls = mem_.read_or<std::uint8_t>(pawn + o.pawn_life_state, 1);
-    const std::uint8_t  tn = mem_.read_or<std::uint8_t>(pawn + o.pawn_team_num, 0);
-    health = static_cast<int>(hp);
-    team   = static_cast<int>(tn);
-    alive  = (ls == 0) && (hp > 0) && (hp < 100000);
+    const auto hp = mem_.read<std::uint32_t>(pawn + o.pawn_health);
+    const auto ls = mem_.read<std::uint8_t>(pawn + o.pawn_life_state);
+    const auto tn = mem_.read<std::uint8_t>(pawn + o.pawn_team_num);
+    if (!hp || !ls || !tn) {
+        return false;
+    }
+    health = static_cast<int>(*hp);
+    team   = static_cast<int>(*tn);
+    alive  = (*ls == 0) && (*hp > 0) && (*hp < 100000);
     return true;
 }
 
@@ -53,18 +56,18 @@ bool Game::read_pawn_origin(std::uint64_t pawn, Vec3& out) const {
     const Offsets& o = cfg_.offsets;
     if (pawn == 0 || o.pawn_p_game_scene_node == 0) return false;
 
-    const std::uint64_t node = mem_.read_or<std::uint64_t>(pawn + o.pawn_p_game_scene_node, 0);
-    if (node == 0) return false;
+    const auto node = mem_.read<std::uint64_t>(pawn + o.pawn_p_game_scene_node);
+    if (!node || *node == 0) return false;
 
     float v[3];
 
     if (o.node_origin != 0 &&
-        mem_.read_quiet(node + o.node_origin, v, sizeof(v))) {
+        mem_.read_quiet(*node + o.node_origin, v, sizeof(v))) {
         out.x = v[0]; out.y = v[1]; out.z = v[2];
         return true;
     }
     if (o.node_model_state != 0 && o.model_state_origin != 0) {
-        const std::uint64_t ms = node + o.node_model_state + o.model_state_origin;
+        const std::uint64_t ms = *node + o.node_model_state + o.model_state_origin;
         if (mem_.read_quiet(ms, v, sizeof(v))) {
             out.x = v[0]; out.y = v[1]; out.z = v[2];
             return true;
@@ -77,15 +80,19 @@ bool Game::read_pawn_bones(std::uint64_t pawn, std::vector<Vec3>& out) const {
     const Offsets& o = cfg_.offsets;
     if (pawn == 0 || o.pawn_p_game_scene_node == 0 || o.node_bone_array == 0) return false;
 
-    const std::uint64_t node = mem_.read_or<std::uint64_t>(pawn + o.pawn_p_game_scene_node, 0);
-    if (node == 0) return false;
+    const auto node = mem_.read<std::uint64_t>(pawn + o.pawn_p_game_scene_node);
+    if (!node || *node == 0) return false;
 
-    const std::uint64_t bone_ptr = mem_.read_or<std::uint64_t>(node + o.node_bone_array, 0);
-    if (bone_ptr == 0) return false;
+    const auto bone_ptr = mem_.read<std::uint64_t>(*node + o.node_bone_array);
+    if (!bone_ptr || *bone_ptr == 0) return false;
 
     constexpr size_t kNumBones = 24;
     float buf[kNumBones * 8]; // 24 * 32 bytes = 768 bytes
-    if (!mem_.read_quiet(bone_ptr, buf, sizeof(buf))) return false;
+    if (!mem_.read_quiet(*bone_ptr, buf, sizeof(buf))) {
+        log_throttled("game.bones_read_fail", 5, LogLevel::Warn,
+                      "failed to read bone array (768 bytes) at " + hex_addr(*bone_ptr));
+        return false;
+    }
 
     out.resize(kNumBones);
     for (size_t i = 0; i < kNumBones; ++i) {
@@ -146,24 +153,23 @@ bool Game::read_local_recoil(int& shots_fired, Vec2& punch) const {
     return true;
 }
 
-// m_iszPlayerName в CS2 — inline-строка внутри CBasePlayerController (не указатель).
-// Читаем прямо из controller + offset и обрезаем по нулю.
+// m_iszPlayerName in CS2 is an inline string inside CBasePlayerController (not a pointer).
+// Direct read from controller + offset.
 std::string Game::read_pawn_name(std::uint64_t pawn) const {
     const Offsets& o = cfg_.offsets;
     if (pawn == 0 || o.pawn_controller_handle == 0 || o.controller_name == 0 ||
         entity_system_.load() == 0) {
         return {};
     }
-    const std::uint32_t handle = mem_.read_or<std::uint32_t>(pawn + o.pawn_controller_handle, 0);
-    if ((handle & 0x7FFFFFFF) == 0) return {};
+    const auto handle = mem_.read<std::uint32_t>(pawn + o.pawn_controller_handle);
+    if (!handle || (*handle & 0x7FFFFFFF) == 0) return {};
 
-    const std::uint64_t controller = resolve_handle(handle);
+    const std::uint64_t controller = resolve_handle(*handle);
     if (controller == 0) return {};
 
     char buf[64] = {};
     if (!mem_.read_quiet(controller + o.controller_name, buf, sizeof(buf) - 1)) return {};
     buf[sizeof(buf) - 1] = '\0';
-    // Отфильтруем явный мусор (не-ASCII в первом байте / пусто)
     if (static_cast<unsigned char>(buf[0]) < 0x20 ||
         static_cast<unsigned char>(buf[0]) > 0x7E) {
         return {};
@@ -195,8 +201,7 @@ bool Game::is_player_pawn(std::uint64_t entity) {
     return is_pawn;
 }
 
-// Resolve CHandle → entity-pointer через bucket array CGameEntitySystem.
-// entity_system_ уже закеширован в update() на кадре.
+// Resolve CHandle -> entity pointer through CGameEntitySystem bucket array.
 std::uint64_t Game::resolve_handle(std::uint32_t handle) const {
     const std::uint64_t es = entity_system_.load();
     if (es == 0) return 0;
@@ -205,10 +210,10 @@ std::uint64_t Game::resolve_handle(std::uint32_t handle) const {
     const std::uint64_t chunk = chunk_slot_of(idx, static_cast<int>(o.el_chunk_shift));
     const std::uint64_t slot  = slot_in_chunk_of(idx, static_cast<int>(o.el_chunk_shift));
 
-    const std::uint64_t bucket = mem_.read_or<std::uint64_t>(
-        es + o.el_chunk_stride + o.el_pointer_size * chunk, 0);
-    if (bucket == 0) return 0;
-    return mem_.read_or<std::uint64_t>(bucket + o.el_entity_stride * slot, 0);
+    const auto bucket = mem_.read<std::uint64_t>(
+        es + o.el_chunk_stride + o.el_pointer_size * chunk);
+    if (!bucket || *bucket == 0) return 0;
+    return mem_.read_or<std::uint64_t>(*bucket + o.el_entity_stride * slot, 0);
 }
 
 void Game::walk_entity_list(Snapshot& out, std::uint64_t local_pawn) {
@@ -318,16 +323,15 @@ void Game::update(Snapshot& out) {
     }
     out.offsets_ready = true;
 
-    // Entity system — хранится как указатель-глобал в rodata libclient.so.
-    // Деред нужен, иначе будем ходить по байтам секции модуля.
-    const std::uint64_t es = mem_.read_or<std::uint64_t>(base_ + o.rva_entity_list, 0);
-    entity_system_.store(es);
-    if (es == 0) {
+    // Entity system pointer in libclient.so rodata.
+    const auto es = mem_.read<std::uint64_t>(base_ + o.rva_entity_list);
+    const std::uint64_t es_val = es.value_or(0);
+    entity_system_.store(es_val);
+    if (es_val == 0) {
         log_throttled("game.es_null", 5, LogLevel::Info,
-                      "entity system pointer null (игра ещё не в карте)");
+                      "entity system pointer null (match not loaded)");
     }
 
-    // view matrix
     float raw[16];
     if (mem_.read_quiet(base_ + o.rva_view_matrix, raw, sizeof(raw))) {
         for (int r = 0; r < 4; ++r) {
@@ -340,43 +344,41 @@ void Game::update(Snapshot& out) {
         log_throttled("game.matrix", 5, LogLevel::Warn, "view matrix read failed");
     }
 
-    // локальный игрок: controller → m_hPawn → resolve → pawn
     std::uint64_t local_pawn = 0;
     if (o.rva_local_player_controller != 0 && o.controller_pawn_handle != 0 &&
-        es != 0) {
-        const std::uint64_t lc = mem_.read_or<std::uint64_t>(
-            base_ + o.rva_local_player_controller, 0);
-        if (lc != 0) {
-            const std::uint32_t pawn_handle = mem_.read_or<std::uint32_t>(
-                lc + o.controller_pawn_handle, 0);
-            local_pawn = resolve_handle(pawn_handle);
-            local_pawn_.store(local_pawn);
-            if (local_pawn != 0) {
-                int hp = 0, team = 0;
-                bool alive = false;
-                if (read_pawn_meta(local_pawn, hp, team, alive) && alive) {
-                    Vec3 lo;
-                    if (read_pawn_origin(local_pawn, lo)) {
-                        out.have_local = true;
-                        out.local_team = team;
-                        out.local_origin = lo;
-                        read_local_recoil(out.local_shots_fired, out.local_punch);
-                    } else {
-                        log_throttled("game.local_origin", 5, LogLevel::Warn,
-                                      "cannot read local pawn origin");
+        es_val != 0) {
+        const auto lc = mem_.read<std::uint64_t>(base_ + o.rva_local_player_controller);
+        if (lc && *lc != 0) {
+            const auto pawn_handle = mem_.read<std::uint32_t>(*lc + o.controller_pawn_handle);
+            if (pawn_handle && *pawn_handle != 0) {
+                local_pawn = resolve_handle(*pawn_handle);
+                local_pawn_.store(local_pawn);
+                if (local_pawn != 0) {
+                    int hp = 0, team = 0;
+                    bool alive = false;
+                    if (read_pawn_meta(local_pawn, hp, team, alive) && alive) {
+                        Vec3 lo;
+                        if (read_pawn_origin(local_pawn, lo)) {
+                            out.have_local = true;
+                            out.local_team = team;
+                            out.local_origin = lo;
+                            read_local_recoil(out.local_shots_fired, out.local_punch);
+                        } else {
+                            log_throttled("game.local_origin", 5, LogLevel::Warn,
+                                          "cannot read local pawn origin");
+                        }
                     }
+                } else {
+                    log_throttled("game.local_pawn_null", 5, LogLevel::Info,
+                                  "local pawn pointer is null (in menu / dead?)");
                 }
-            } else {
-                log_throttled("game.local_pawn_null", 5, LogLevel::Info,
-                              "local pawn pointer is null (in menu / dead?)");
             }
         } else {
             log_throttled("game.lc_null", 5, LogLevel::Info,
-                          "local controller pointer is null (в главном меню?)");
+                          "local controller pointer is null (in main menu)");
         }
     } else if (!reported_missing_) {
-        log_warn("offsets.json: rvas.dwLocalPlayerController или controller.m_hPawn == 0 — "
-                 "team check отключен");
+        log_warn("offsets.json: missing dwLocalPlayerController or controller.m_hPawn - team check disabled");
     }
 
     walk_entity_list(out, local_pawn);
