@@ -11,6 +11,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <unistd.h>
 
 namespace cs2esp {
@@ -40,6 +43,84 @@ int x_error_handler(Display*, XErrorEvent* e) {
 int x_io_error_handler(Display*) {
     // libX11 fatal IO error handler (server shutdown or connection closed).
     std::_Exit(1);
+}
+
+struct ScopedFd {
+    int fd{-1};
+    ~ScopedFd() { if (fd >= 0) ::close(fd); }
+    operator int() const { return fd; }
+};
+
+bool send_hyprland_command(const std::string& cmd, std::string& reply) {
+    const char* sig = std::getenv("HYPRLAND_INSTANCE_SIGNATURE");
+    if (!sig || *sig == '\0') return false;
+
+    std::string sock_path;
+    const char* xdg_runtime = std::getenv("XDG_RUNTIME_DIR");
+    if (xdg_runtime && *xdg_runtime != '\0') {
+        sock_path = std::string(xdg_runtime) + "/hypr/" + sig + "/.socket.sock";
+    }
+    if (sock_path.empty() || ::access(sock_path.c_str(), F_OK) != 0) {
+        sock_path = std::string("/tmp/hypr/") + sig + "/.socket.sock";
+    }
+
+    ScopedFd sock{::socket(AF_UNIX, SOCK_STREAM, 0)};
+    if (sock < 0) return false;
+
+    struct sockaddr_un addr{};
+    addr.sun_family = AF_UNIX;
+    std::strncpy(addr.sun_path, sock_path.c_str(), sizeof(addr.sun_path) - 1);
+
+    if (::connect(sock, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) != 0) {
+        return false;
+    }
+
+    std::string msg = cmd;
+    if (msg.empty() || msg.back() != '\n') msg.push_back('\n');
+
+    const ssize_t sent = ::send(sock, msg.data(), msg.size(), 0);
+    if (sent < 0 || static_cast<std::size_t>(sent) != msg.size()) {
+        return false;
+    }
+
+    char buf[512] = {};
+    const ssize_t n = ::recv(sock, buf, sizeof(buf) - 1, 0);
+    if (n >= 0) {
+        buf[n] = '\0';
+        reply = buf;
+        return true;
+    }
+    return false;
+}
+
+void configure_hyprland_overlay_rules(const std::string& window_class) {
+    if (std::getenv("HYPRLAND_INSTANCE_SIGNATURE") == nullptr) return;
+
+    const auto apply_class = [](const std::string& cls) {
+        std::string lua_cmd = "eval hl.window_rule({ match = { class = \"" +
+                              cls + "\" }, no_blur = true, no_focus = true, no_initial_focus = true })";
+        std::string reply;
+        if (send_hyprland_command(lua_cmd, reply) && reply.find("ok") != std::string::npos) {
+            return;
+        }
+
+        const std::string conf_rules[] = {
+            "keyword windowrulev2 noblur,class:^(" + cls + ")$",
+            "keyword windowrulev2 nofocus,class:^(" + cls + ")$",
+            "keyword windowrulev2 noinitialfocus,class:^(" + cls + ")$"
+        };
+        for (const auto& r : conf_rules) {
+            std::string r_reply;
+            if (!send_hyprland_command(r, r_reply)) {
+                log_warn("hyprland ipc: failed to apply rule '" + r + "'");
+            }
+        }
+    };
+
+    apply_class(window_class);
+    if (window_class != "cs2esp") {
+        apply_class("cs2esp");
+    }
 }
 
 } // namespace
@@ -91,25 +172,7 @@ bool Overlay::init(std::string& error) {
         }
     }
 
-    // Автоматическое отключение блюра в Hyprland под класс окна оверлея
-    if (std::getenv("HYPRLAND_INSTANCE_SIGNATURE") != nullptr) {
-        // 1. Для современного Hyprland с Lua API (hyprland.lua)
-        std::string lua_cmd = "hyprctl eval 'hl.window_rule({ match = { class = \"" + window_class_ + "\" }, no_blur = true, no_focus = true, no_initial_focus = true })' >/dev/null 2>&1";
-        [[maybe_unused]] int rc1 = ::system(lua_cmd.c_str());
-        (void)rc1;
-
-        if (window_class_ != "cs2esp") {
-            [[maybe_unused]] int rc3 = ::system("hyprctl eval 'hl.window_rule({ match = { class = \"cs2esp\" }, no_blur = true, no_focus = true, no_initial_focus = true })' >/dev/null 2>&1");
-            (void)rc3;
-        }
-
-        // 2. Для легаси парсера hyprland.conf (keyword)
-        std::string conf_cmd = "hyprctl keyword windowrulev2 'noblur,class:^(" + window_class_ + ")$' >/dev/null 2>&1; "
-                               "hyprctl keyword windowrulev2 'nofocus,class:^(" + window_class_ + ")$' >/dev/null 2>&1; "
-                               "hyprctl keyword windowrulev2 'noinitialfocus,class:^(" + window_class_ + ")$' >/dev/null 2>&1";
-        [[maybe_unused]] int rc2 = ::system(conf_cmd.c_str());
-        (void)rc2;
-    }
+    configure_hyprland_overlay_rules(window_class_);
 
     dpy_ = XOpenDisplay(nullptr);
     if (!dpy_) {
