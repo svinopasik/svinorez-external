@@ -195,13 +195,23 @@ void Aimbot::tick(const Snapshot& snap, int screen_w, int screen_h) {
         if (cfg_.aimbot.humanize) {
             static std::random_device rd;
             static std::mt19937 rng(rd());
-            std::uniform_real_distribution<float> jitter(-0.35f, 0.35f);
 
-            // Добавляем микро-джиттер, чтобы вектор движения не был прямой линейной интерполяцией
-            move_x += jitter(rng);
-            move_y += jitter(rng);
+            // Синусоидальный ease-in / ease-out: мягкий старт на периферии и замедление у цели
+            const float fov = std::max(1.0f, cfg_.aimbot.fov);
+            const float dist_norm = std::clamp(best_dist / fov, 0.0f, 1.0f);
+            constexpr float kPi = 3.14159265358979323846f;
+            const float ease_factor = 0.35f + 0.65f * std::sin(dist_norm * kPi);
 
-            constexpr float kMaxLegitStep = 10.0f;
+            move_x *= ease_factor;
+            move_y *= ease_factor;
+
+            // Микро-дрожание (jitter) в 1-2 пикселя
+            std::uniform_real_distribution<float> jitter_dist(-1.5f, 1.5f);
+            const float jitter_scale = std::min(1.0f, best_dist / 3.0f);
+            move_x += jitter_dist(rng) * jitter_scale;
+            move_y += jitter_dist(rng) * jitter_scale;
+
+            constexpr float kMaxLegitStep = 12.0f;
             move_x = std::clamp(move_x, -kMaxLegitStep, kMaxLegitStep);
             move_y = std::clamp(move_y, -kMaxLegitStep, kMaxLegitStep);
         } else {

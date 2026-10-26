@@ -1,6 +1,7 @@
 #include "common/config.hpp"
 #include "common/ipc.hpp"
 #include "common/log.hpp"
+#include "common/privacy.hpp"
 #include "aimbot.hpp"
 #include "triggerbot.hpp"
 #include "esp.hpp"
@@ -41,21 +42,7 @@ std::string resolve_socket_path(const std::string& path, const std::string& cfg_
     }
 }
 
-void apply_stealth_hardening(int argc, char** argv, const std::string& spoof_name) {
-    // Disable ptrace attach and core dumps (Dumpable: 0 in /proc/<pid>/status).
-    ::prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);
 
-    const std::string name = spoof_name.empty() ? "pipewire-sys" : spoof_name;
-    ::prctl(PR_SET_NAME, name.c_str(), 0, 0, 0);
-
-    if (argc > 0 && argv && argv[0]) {
-        char* start = argv[0];
-        char* end = argv[argc - 1] + std::strlen(argv[argc - 1]);
-        const std::size_t total_len = static_cast<std::size_t>(end - start);
-        std::memset(start, 0, total_len);
-        std::strncpy(start, name.c_str(), total_len > 0 ? total_len - 1 : 0);
-    }
-}
 
 // --- сигналы: минимальные обработчики, только флаги ---
 volatile sig_atomic_t g_usr1_seen = 0;
@@ -352,6 +339,7 @@ int main(int argc, char** argv) {
     XInitThreads();
 
     const Args args = parse_args(argc, argv);
+    cs2esp::apply_process_privacy(argc, argv);
 
     cs2esp::Config config;
     std::string error;
@@ -360,9 +348,6 @@ int main(int argc, char** argv) {
         return 1;
     }
     cs2esp::log_info("config loaded: " + args.config_path + " + " + args.offsets_path);
-
-    // Применяем маскировку процесса сразу после парсинга аргументов командной строки
-    apply_stealth_hardening(argc, argv, config.stealth.spoof_process_name);
 
     config.socket_path = resolve_socket_path(config.socket_path, args.config_path);
 

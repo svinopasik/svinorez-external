@@ -128,15 +128,13 @@ void Triggerbot::shoot(int target_idx, int target_health) {
     (void)target_health;
     if (!dpy_) return;
 
+    static std::random_device rd;
+    static std::mt19937 rng(rd());
+
     if (cfg_.triggerbot.humanize) {
-        static std::random_device rd;
-        static std::mt19937 rng(rd());
-
-        // Человеческая реакция: среднее из конфига с естественной дисперсией ~28 мс
-        const float mean = static_cast<float>(std::max(150, cfg_.triggerbot.pre_delay_ms));
-        std::normal_distribution<float> delay_dist(mean, 28.0f);
-        const int delay = std::clamp(static_cast<int>(delay_dist(rng)), 135, 380);
-
+        // Случайная задержка реакции от 50 до 150 мс перед выстрелом
+        std::uniform_int_distribution<int> reaction_dist(50, 150);
+        const int delay = reaction_dist(rng);
         std::this_thread::sleep_for(std::chrono::milliseconds(delay));
 
         // Длительность удержания ЛКМ: 35..75 мс (не константная)

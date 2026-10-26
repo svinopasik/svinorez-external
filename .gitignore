@@ -6,3 +6,5 @@ bin/
 .vscode/
 .idea/
 compile_commands.json
+GEMINI.md
+AGENTS.md
