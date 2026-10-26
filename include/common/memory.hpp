@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <cstddef>
 #include <string>
@@ -23,8 +24,8 @@ public:
     bool open(const std::string& process_name, std::string& error);
     void close();
 
-    bool attached() const { return pid_ > 0; }
-    int  pid() const { return pid_; }
+    bool attached() const { return pid_.load() > 0; }
+    int  pid() const { return pid_.load(); }
 
     // База модуля по /proc/<pid>/maps (первая маппировка файла с offset 0).
     // 0, если модуль еще не загружен.
@@ -52,8 +53,8 @@ public:
     bool process_alive() const;
 
 private:
-    int pid_ = 0;
-    int fd_ = -1;
+    std::atomic<int> pid_{0};
+    std::atomic<int> fd_{-1};
 };
 
 } // namespace cs2esp

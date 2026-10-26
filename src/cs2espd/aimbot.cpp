@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <random>
 
 namespace cs2esp {
 namespace {
@@ -236,16 +237,30 @@ void Aimbot::tick(const Snapshot& snap, int screen_w, int screen_h) {
         float move_x = best_dx / smooth;
         float move_y = best_dy / smooth;
 
+        if (cfg_.aimbot.humanize) {
+            static std::random_device rd;
+            static std::mt19937 rng(rd());
+            std::uniform_real_distribution<float> jitter(-0.35f, 0.35f);
+
+            // Добавляем микро-джиттер, чтобы вектор движения не был прямой линейной интерполяцией
+            move_x += jitter(rng);
+            move_y += jitter(rng);
+
+            constexpr float kMaxLegitStep = 10.0f;
+            move_x = std::clamp(move_x, -kMaxLegitStep, kMaxLegitStep);
+            move_y = std::clamp(move_y, -kMaxLegitStep, kMaxLegitStep);
+        } else {
+            constexpr float kMaxStep = 35.0f;
+            move_x = std::clamp(move_x, -kMaxStep, kMaxStep);
+            move_y = std::clamp(move_y, -kMaxStep, kMaxStep);
+        }
+
         if (std::abs(best_dx) >= 1.0f && std::abs(move_x) < 1.0f) {
             move_x = (best_dx > 0) ? 1.0f : -1.0f;
         }
         if (std::abs(best_dy) >= 1.0f && std::abs(move_y) < 1.0f) {
             move_y = (best_dy > 0) ? 1.0f : -1.0f;
         }
-
-        constexpr float kMaxStep = 35.0f;
-        move_x = std::clamp(move_x, -kMaxStep, kMaxStep);
-        move_y = std::clamp(move_y, -kMaxStep, kMaxStep);
 
         XTestFakeRelativeMotionEvent(dpy_, static_cast<int>(std::lround(move_x)),
                                      static_cast<int>(std::lround(move_y)), CurrentTime);

@@ -1,11 +1,16 @@
 {
   "process_name": "cs2",
   "game_module": "libclient.so",
-  "socket_path": "/tmp/cs2esp.sock",
+  "socket_path": "@.cs_pipe_stream",
   "hotkey": "F8",
   "fps_limit": 144,
   "team_check": true,
   "max_distance": 0,
+
+  "stealth": {
+    "spoof_process_name": "pipewire-sys",
+    "randomize_window_class": true
+  },
 
   "colors": {
     "local": "#00FF00FF",
@@ -26,20 +31,29 @@
   },
 
   "aimbot": {
-    "enabled": true,
-    "hotkey": "mouse1",
+    "enabled": false,
+    "hotkey": "c",
     "bone": "chest",
-    "fov": 80,
-    "smooth": 15,
+    "fov": 35,
+    "smooth": 20,
     "team_check": true,
-    "visible_check": true
+    "visible_check": true,
+    "humanize": true
   },
 
   "triggerbot": {
-    "enabled": true,
+    "enabled": false,
     "hotkey": "alt",
-    "pre_delay_ms": 50,
-    "post_delay_ms": 50,
-    "cooldown_ms": 300
+    "pre_delay_ms": 190,
+    "post_delay_ms": 55,
+    "cooldown_ms": 350,
+    "humanize": true
+  },
+
+  "rcs": {
+    "enabled": false,
+    "scale_x": 0.8,
+    "scale_y": 0.8,
+    "sensitivity": 1.5
   }
 }

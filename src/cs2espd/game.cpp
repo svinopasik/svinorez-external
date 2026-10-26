@@ -151,7 +151,7 @@ bool Game::read_local_recoil(int& shots_fired, Vec2& punch) const {
 std::string Game::read_pawn_name(std::uint64_t pawn) const {
     const Offsets& o = cfg_.offsets;
     if (pawn == 0 || o.pawn_controller_handle == 0 || o.controller_name == 0 ||
-        entity_system_ == 0) {
+        entity_system_.load() == 0) {
         return {};
     }
     const std::uint32_t handle = mem_.read_or<std::uint32_t>(pawn + o.pawn_controller_handle, 0);
@@ -198,14 +198,15 @@ bool Game::is_player_pawn(std::uint64_t entity) {
 // Resolve CHandle → entity-pointer через bucket array CGameEntitySystem.
 // entity_system_ уже закеширован в update() на кадре.
 std::uint64_t Game::resolve_handle(std::uint32_t handle) const {
-    if (entity_system_ == 0) return 0;
+    const std::uint64_t es = entity_system_.load();
+    if (es == 0) return 0;
     const Offsets& o = cfg_.offsets;
     const std::uint64_t idx = handle & o.el_index_mask;
     const std::uint64_t chunk = chunk_slot_of(idx, static_cast<int>(o.el_chunk_shift));
     const std::uint64_t slot  = slot_in_chunk_of(idx, static_cast<int>(o.el_chunk_shift));
 
     const std::uint64_t bucket = mem_.read_or<std::uint64_t>(
-        entity_system_ + o.el_chunk_stride + o.el_pointer_size * chunk, 0);
+        es + o.el_chunk_stride + o.el_pointer_size * chunk, 0);
     if (bucket == 0) return 0;
     return mem_.read_or<std::uint64_t>(bucket + o.el_entity_stride * slot, 0);
 }
@@ -224,10 +225,15 @@ void Game::walk_entity_list(Snapshot& out, std::uint64_t local_pawn) {
         if (chunk_slot != cached_chunk_slot) {
             cached_chunk_slot = chunk_slot;
             bucket_ptr = mem_.read_or<std::uint64_t>(
-                entity_system_ + o.el_chunk_stride + o.el_pointer_size * chunk_slot, 0);
-            if (bucket_ptr == 0) break;
+                entity_system_.load() + o.el_chunk_stride + o.el_pointer_size * chunk_slot, 0);
         }
-        if (bucket_ptr == 0) continue;
+        if (bucket_ptr == 0) {
+            const std::uint64_t next_chunk_start = (chunk_slot + 1) << shift;
+            if (next_chunk_start > idx) {
+                idx = next_chunk_start - 1;
+            }
+            continue;
+        }
 
         const std::uint64_t entity = mem_.read_or<std::uint64_t>(
             bucket_ptr + o.el_entity_stride * slot_in_chunk_of(idx, shift), 0);
@@ -275,7 +281,7 @@ void Game::update(Snapshot& out) {
                       cfg_.process_name + " process is gone; waiting for restart");
         mem_.close();
         base_ = 0;
-        entity_system_ = 0;
+        entity_system_.store(0);
         local_pawn_.store(0);
         vtable_cache_.clear();
         return;
@@ -314,8 +320,9 @@ void Game::update(Snapshot& out) {
 
     // Entity system — хранится как указатель-глобал в rodata libclient.so.
     // Деред нужен, иначе будем ходить по байтам секции модуля.
-    entity_system_ = mem_.read_or<std::uint64_t>(base_ + o.rva_entity_list, 0);
-    if (entity_system_ == 0) {
+    const std::uint64_t es = mem_.read_or<std::uint64_t>(base_ + o.rva_entity_list, 0);
+    entity_system_.store(es);
+    if (es == 0) {
         log_throttled("game.es_null", 5, LogLevel::Info,
                       "entity system pointer null (игра ещё не в карте)");
     }
@@ -336,7 +343,7 @@ void Game::update(Snapshot& out) {
     // локальный игрок: controller → m_hPawn → resolve → pawn
     std::uint64_t local_pawn = 0;
     if (o.rva_local_player_controller != 0 && o.controller_pawn_handle != 0 &&
-        entity_system_ != 0) {
+        es != 0) {
         const std::uint64_t lc = mem_.read_or<std::uint64_t>(
             base_ + o.rva_local_player_controller, 0);
         if (lc != 0) {
@@ -378,7 +385,7 @@ void Game::update(Snapshot& out) {
 bool Game::get_crosshair_target(int& target_ent_idx, int& target_team, int& target_health) const {
     const std::uint64_t pawn = local_pawn_.load();
     const Offsets& o = cfg_.offsets;
-    if (pawn == 0 || o.pawn_ident_index == 0 || !mem_.attached() || entity_system_ == 0) {
+    if (pawn == 0 || o.pawn_ident_index == 0 || !mem_.attached() || entity_system_.load() == 0) {
         return false;
     }
 

@@ -48,11 +48,16 @@ struct Offsets {
 struct Config {
     std::string process_name = "cs2";           // имя процесса игры
     std::string game_module  = "libclient.so";  // клиентский модуль
-    std::string socket_path  = "/tmp/cs2esp.sock";
+    std::string socket_path  = "@.cs_pipe_stream"; // абстрактный сокет (без файлов в /tmp)
     std::string hotkey       = "F8";
     int  fps_limit           = 144;
     bool team_check          = true;            // не рисовать своих
     float max_distance       = 0.0f;            // в игровых юнитах; 0 = без ограничения
+
+    struct Stealth {
+        std::string spoof_process_name = "pipewire-sys"; // маскировка в /proc/<pid>/comm и cmdline
+        bool randomize_window_class    = true;           // случайный WM_CLASS для оверлея
+    } stealth;
 
     // Цвета в формате #RRGGBBAA
     std::string color_local    = "#00FF00FF";
@@ -73,27 +78,29 @@ struct Config {
 
     struct Aimbot {
         bool enabled             = false;
-        std::string hotkey       = "always"; // "always", "alt", "shift", "ctrl", "caps", "c", "v", "x"
-        std::string bone         = "head";   // "head" (кость 7) или "chest" (кость 5)
-        float fov                = 120.0f;   // радиус захвата FOV в пикселях
-        float smooth             = 4.0f;     // фактор сглаживания доводки мыши
+        std::string hotkey       = "c";      // "always", "alt", "shift", "ctrl", "caps", "c", "v", "x"
+        std::string bone         = "chest";  // "head" (кость 7) или "chest" (кость 5)
+        float fov                = 35.0f;    // радиус захвата FOV в пикселях
+        float smooth             = 20.0f;    // фактор сглаживания доводки мыши
         bool team_check          = true;     // целиться только во врагов
         bool visible_check       = true;     // не целиться через стены (проверка видимости)
+        bool humanize            = true;     // нелинейная доводка и микро-джиттер
     } aimbot;
 
     struct Triggerbot {
         bool enabled             = false;
-        std::string hotkey       = "always"; // "always", "ALT", "SHIFT", "X", etc.
-        int pre_delay_ms         = 10;       // задержка до выстрела (мс)
-        int post_delay_ms        = 20;       // длительность удержания клика (мс)
-        int cooldown_ms          = 120;      // кулдаун между выстрелами (мс)
+        std::string hotkey       = "alt";    // "always", "ALT", "SHIFT", "X", etc.
+        int pre_delay_ms         = 190;      // задержка до выстрела (мс, центр гауссова распределения)
+        int post_delay_ms        = 55;       // длительность удержания клика (мс)
+        int cooldown_ms          = 350;      // кулдаун между выстрелами (мс)
+        bool humanize            = true;     // нормальное гауссово распределение времени реакции
     } triggerbot;
 
     struct Rcs {
-        bool enabled             = true;
-        float scale_x            = 1.0f;     // множитель компенсации по горизонтали (1.0 = 100%)
-        float scale_y            = 1.0f;     // множитель компенсации по вертикали (1.0 = 100%)
-        float sensitivity        = 2.0f;     // внутриигровая чувствительность мыши в CS2
+        bool enabled             = false;    // ВЫКЛЮЧЕН по умолчанию для безопасности мейна
+        float scale_x            = 0.8f;     // множитель компенсации по горизонтали (1.0 = 100%)
+        float scale_y            = 0.8f;     // множитель компенсации по вертикали (1.0 = 100%)
+        float sensitivity        = 1.5f;     // внутриигровая чувствительность мыши в CS2
     } rcs;
 
     Offsets offsets;

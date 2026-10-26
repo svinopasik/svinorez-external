@@ -15,6 +15,26 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
+# Генерация уникальной соли сборки (полиморфизм хэша бинарника)
+string(RANDOM LENGTH 64 ALPHABET "0123456789abcdef" BUILD_SALT)
+string(TIMESTAMP BUILD_TIME "%Y%m%d%H%M%S")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/build_salt.hpp"
+    "#pragma once\nnamespace cs2esp {\ninline volatile const char kBuildSalt[] = \"${BUILD_SALT}_${BUILD_TIME}\";\n}\n")
+include_directories("${CMAKE_CURRENT_BINARY_DIR}")
+
+# Флаги оптимизации, скрытия символов и защиты
+add_compile_options(
+    -Wall
+    -Wextra
+    -O3
+    -fvisibility=hidden
+    -fvisibility-inlines-hidden
+    -fno-ident
+    -fstack-protector-strong
+    -D_FORTIFY_SOURCE=2
+)
+add_link_options(-Wl,--strip-all -Wl,-z,relro -Wl,-z,now)
+
 find_package(X11 REQUIRED)
 find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)

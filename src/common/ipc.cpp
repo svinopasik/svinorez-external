@@ -14,39 +14,66 @@ std::string errno_text(int e) {
     return std::string(::strerror(e)) + "(" + std::to_string(e) + ")";
 }
 
+bool fill_sockaddr(const std::string& path, sockaddr_un& addr, socklen_t& len, std::string& error) {
+    std::memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+
+    if (path.empty()) {
+        error = "empty socket path";
+        return false;
+    }
+
+    if (path[0] == '@') {
+        // Abstract Unix Domain Socket (Linux-specific, no filesystem inode)
+        const std::string name = path.substr(1);
+        if (name.size() >= sizeof(addr.sun_path)) {
+            error = "abstract socket name too long: " + path;
+            return false;
+        }
+        addr.sun_path[0] = '\0';
+        std::memcpy(&addr.sun_path[1], name.data(), name.size());
+        len = static_cast<socklen_t>(offsetof(struct sockaddr_un, sun_path) + 1 + name.size());
+        return true;
+    }
+
+    // Standard filesystem Unix socket
+    if (path.size() >= sizeof(addr.sun_path)) {
+        error = "socket path too long: " + path;
+        return false;
+    }
+    std::memcpy(addr.sun_path, path.c_str(), path.size() + 1);
+    len = sizeof(addr);
+    return true;
+}
+
 } // namespace
 
 int ipc_server_start(const std::string& path, std::string& error) {
-    // Занят ли файл сокета живым демоном?
-    struct stat st{};
-    if (::stat(path.c_str(), &st) == 0) {
-        int probe = ::socket(AF_UNIX, SOCK_STREAM, 0);
-        if (probe != -1) {
-            sockaddr_un addr{};
-            addr.sun_family = AF_UNIX;
-            if (path.size() < sizeof(addr.sun_path)) {
-                std::memcpy(addr.sun_path, path.c_str(), path.size() + 1);
-                if (::connect(probe, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) == 0) {
-                    ::close(probe);
-                    error = "socket " + path + " is busy: another cs2espd is listening there";
-                    return -1;
-                }
-            }
-            ::close(probe);
-        }
-        // Не отвечает → stale-файл от прошлого запуска, убираем.
-        if (::unlink(path.c_str()) != 0) {
-            error = "cannot unlink stale socket " + path + ": " + errno_text(errno);
-            return -1;
-        }
-    } else if (errno != ENOENT) {
-        error = "stat(" + path + ") failed: " + errno_text(errno);
+    sockaddr_un addr{};
+    socklen_t addr_len = 0;
+    if (!fill_sockaddr(path, addr, addr_len, error)) {
         return -1;
     }
 
-    if (path.size() >= sizeof(sockaddr_un{}.sun_path)) {
-        error = "socket path too long: " + path;
-        return -1;
+    const bool is_abstract = (path[0] == '@');
+
+    if (!is_abstract) {
+        struct stat st{};
+        if (::stat(path.c_str(), &st) == 0) {
+            int probe = ::socket(AF_UNIX, SOCK_STREAM, 0);
+            if (probe != -1) {
+                if (::connect(probe, reinterpret_cast<const sockaddr*>(&addr), addr_len) == 0) {
+                    ::close(probe);
+                    error = "socket " + path + " is busy: another instance is listening there";
+                    return -1;
+                }
+                ::close(probe);
+            }
+            if (::unlink(path.c_str()) != 0) {
+                error = "cannot unlink stale socket " + path + ": " + errno_text(errno);
+                return -1;
+            }
+        }
     }
 
     const int srv = ::socket(AF_UNIX, SOCK_STREAM, 0);
@@ -55,56 +82,56 @@ int ipc_server_start(const std::string& path, std::string& error) {
         return -1;
     }
 
-    sockaddr_un addr{};
-    addr.sun_family = AF_UNIX;
-    std::memcpy(addr.sun_path, path.c_str(), path.size() + 1);
+    if (::bind(srv, reinterpret_cast<const sockaddr*>(&addr), addr_len) == -1) {
+        const int e = errno;
+        ::close(srv);
+        if (is_abstract && e == EADDRINUSE) {
+            error = "abstract socket " + path + " is busy: another instance is running";
+        } else {
+            error = "bind(" + path + ") failed: " + errno_text(e);
+        }
+        return -1;
+    }
 
-    if (::bind(srv, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) == -1) {
-        error = "bind(" + path + ") failed: " + errno_text(errno);
-        ::close(srv);
-        return -1;
+    if (!is_abstract) {
+        ::chmod(path.c_str(), 0666);
     }
-    // espctl может быть кем угодно: делаем сокет доступным всем
-    if (::chmod(path.c_str(), 0666) != 0) {
-        error = "chmod(" + path + ") failed: " + errno_text(errno);
-        ::close(srv);
-        ::unlink(path.c_str());
-        return -1;
-    }
+
     if (::listen(srv, 16) == -1) {
         error = "listen() failed: " + errno_text(errno);
         ::close(srv);
-        ::unlink(path.c_str());
+        if (!is_abstract) ::unlink(path.c_str());
         return -1;
     }
+
     error.clear();
     return srv;
 }
 
 int ipc_client_connect(const std::string& path, std::string& error) {
-    if (path.size() >= sizeof(sockaddr_un{}.sun_path)) {
-        error = "socket path too long: " + path;
+    sockaddr_un addr{};
+    socklen_t addr_len = 0;
+    if (!fill_sockaddr(path, addr, addr_len, error)) {
         return -1;
     }
+
     const int fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd == -1) {
         error = "socket(AF_UNIX) failed: " + errno_text(errno);
         return -1;
     }
-    sockaddr_un addr{};
-    addr.sun_family = AF_UNIX;
-    std::memcpy(addr.sun_path, path.c_str(), path.size() + 1);
 
-    if (::connect(fd, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) == -1) {
+    if (::connect(fd, reinterpret_cast<const sockaddr*>(&addr), addr_len) == -1) {
         const int e = errno;
         ::close(fd);
         if (e == ENOENT || e == ECONNREFUSED) {
-            error = "cannot connect to " + path + ": cs2espd is not running";
+            error = "cannot connect to " + path + ": daemon is not running";
         } else {
             error = "connect(" + path + ") failed: " + errno_text(e);
         }
         return -1;
     }
+
     error.clear();
     return fd;
 }
@@ -137,7 +164,7 @@ bool ipc_recv_line(int fd, std::string& out, std::string& error) {
             continue;
         }
         if (n == 0) {
-            if (out.empty()) return true; // корректное закрытие
+            if (out.empty()) return false; // EOF: закрытие соединения
             return true;
         }
         if (errno == EINTR) continue;

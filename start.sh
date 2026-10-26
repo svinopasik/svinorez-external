@@ -18,68 +18,39 @@ fi
 # Проверка запущена ли CS2
 if ! pgrep -x "cs2" >/dev/null 2>&1; then
     echo -e "${YELLOW}[!] Внимание: процесс cs2 сейчас не запущен.${NC}"
-    echo -e "${YELLOW}[*] Демон запустится и будет ожидать запуск игры.${NC}"
+    echo -e "${YELLOW}[*] Демон запустится и будет ожидать запуск игры в фоне.${NC}"
 fi
 
 # Завершаем старый экземпляр если висит
-if pgrep -x "cs2espd" >/dev/null 2>&1; then
-    echo -e "${YELLOW}[*] Перезапуск существующего экземпляра cs2espd...${NC}"
-    pkill -9 -x "cs2espd" 2>/dev/null || true
-    sleep 0.5
+if pgrep -f "cs2espd" >/dev/null 2>&1; then
+    echo -e "${YELLOW}[*] Перезапуск существующего экземпляра...${NC}"
+    pkill -9 -f "cs2espd" 2>/dev/null || true
+    sleep 0.3
 fi
 
+# Очистка устаревших сокетов из /tmp (если использовался старый путь)
 rm -f /tmp/cs2esp.sock
 
-# Автодетект Hyprland: отключение размытия (blur) для прозрачного оверлея
-if [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ] || command -v hyprctl >/dev/null 2>&1; then
-    echo -e "${YELLOW}[*] Обнаружен Hyprland. Применяю правила отключения блюра для оверлея...${NC}"
-    
-    # 1. Применение правил на лету через hyprctl (Lua API и стандартный keyword)
-    hyprctl eval 'hl.window_rule({ match = { class = "cs2esp" }, no_blur = true, no_focus = true, no_initial_focus = true })' >/dev/null 2>&1 || true
-    hyprctl keyword windowrulev2 "noblur,class:^(cs2esp)$" >/dev/null 2>&1 || true
-    hyprctl keyword windowrulev2 "nofocus,class:^(cs2esp)$" >/dev/null 2>&1 || true
-    hyprctl keyword windowrulev2 "noinitialfocus,class:^(cs2esp)$" >/dev/null 2>&1 || true
-
-    # 2. Добавление постоянного правила в пользовательский конфиг, если его там нет
-    HYPR_LUA="$HOME/.config/hypr/hyprland.lua"
-    HYPR_CONF="$HOME/.config/hypr/hyprland.conf"
-
-    if [ -f "$HYPR_LUA" ]; then
-        if ! grep -q "cs2esp" "$HYPR_LUA"; then
-            echo -e "${GREEN}[+] Добавляю no_blur в $HYPR_LUA...${NC}"
-            cat << 'EOF' >> "$HYPR_LUA"
-
--- svinorez-external: отключение блюра для оверлея
-hl.window_rule({ match = { class = "cs2esp" }, no_blur = true, no_focus = true, no_initial_focus = true })
-EOF
-            hyprctl reload >/dev/null 2>&1 || true
-        fi
-    elif [ -f "$HYPR_CONF" ]; then
-        if ! grep -q "cs2esp" "$HYPR_CONF"; then
-            echo -e "${GREEN}[+] Добавляю noblur в $HYPR_CONF...${NC}"
-            cat << 'EOF' >> "$HYPR_CONF"
-
-# svinorez-external: отключение блюра для оверлея
-windowrulev2 = noblur, class:^(cs2esp)$
-windowrulev2 = nofocus, class:^(cs2esp)$
-windowrulev2 = noinitialfocus, class:^(cs2esp)$
-EOF
-            hyprctl reload >/dev/null 2>&1 || true
+# Проверка прав доступа для прямого syscall process_vm_readv
+if [ -f "/proc/sys/kernel/yama/ptrace_scope" ]; then
+    SCOPE=$(cat /proc/sys/kernel/yama/ptrace_scope 2>/dev/null || echo "1")
+    if [ "$SCOPE" != "0" ]; then
+        if ! getcap build/cs2espd 2>/dev/null | grep -q "cap_sys_ptrace"; then
+            echo -e "${YELLOW}[*] Настройка прав CAP_SYS_PTRACE для прямого чтения памяти без следов в /proc/self/fd...${NC}"
+            sudo setcap cap_sys_ptrace=eip build/cs2espd 2>/dev/null || echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope >/dev/null 2>&1 || true
         fi
     fi
-    echo -e "${GREEN}[✓] Правила Hyprland настроены (блюр отключён).${NC}\n"
 fi
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}   Запуск svinorez-external Daemon      ${NC}"
+echo -e "${BLUE}        External Service Launcher       ${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo -e "Горячие клавиши в игре:"
-echo -e "  - ${GREEN}[INSERT]${NC} : Открыть / закрыть интерактивное GUI меню"
+echo -e "  - ${GREEN}[INSERT]${NC} : Открыть / закрыть интерактивное меню"
 echo -e "  - ${GREEN}[F8]${NC}     : Включить / выключить ESP"
-echo -e "\nУправление из консоли:"
-echo -e "  - ${YELLOW}./build/espctl status${NC}  : статус всех модулей"
-echo -e "  - ${YELLOW}./build/espctl menu${NC}    : открыть меню"
-echo -e "  - ${YELLOW}./build/espctl quit${NC}    : остановить чит"
+echo -e "\nУправление через терминал:"
+echo -e "  - ${YELLOW}./build/espctl status${NC}  : статус модулей"
+echo -e "  - ${YELLOW}./build/espctl quit${NC}    : остановка сервиса"
 echo -e "${BLUE}========================================${NC}\n"
 
 exec ./build/cs2espd

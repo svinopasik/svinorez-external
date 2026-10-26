@@ -77,7 +77,7 @@ private:
     const Config& cfg_;
     ProcessMemory mem_;
     std::uint64_t base_ = 0;
-    std::uint64_t entity_system_ = 0;   // кеш CGameEntitySystem* на кадр
+    mutable std::atomic<std::uint64_t> entity_system_{0};   // кеш CGameEntitySystem* на кадр
     mutable std::atomic<std::uint64_t> local_pawn_{0};
     bool reported_missing_ = false;
     std::unordered_map<std::uint64_t, bool> vtable_cache_;

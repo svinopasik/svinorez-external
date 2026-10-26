@@ -20,7 +20,7 @@ cs2espd
   ├─ esp      — world-to-screen, вычисление экранных боксов
   ├─ trigger  — чтение m_iIDEntIndex под прицелом и выстрел через XTest
   ├─ overlay  — X11 ARGB окно: override_redirect, XShape input, текст через Xft
-  └─ ipc      — Unix socket /tmp/cs2esp.sock + XGrabKey(F8) + SIGUSR1
+  └─ ipc      — абстрактный Unix сокет @.cs_pipe_stream + XGrabKey(F8) + SIGUSR1
 
 espctl — CLI: on / off / toggle / trigger [on|off|toggle] / status / quit
 common — memory (pread64 + process_vm_readv fallback), config (json + валидация),
@@ -131,7 +131,8 @@ stale-файл от прошлого запуска корректно подн�
 |--------------|---------------------|------------|
 | `process_name` | `cs2`             | имя процесса игры (по `comm` / `cmdline`) |
 | `game_module`  | `libclient.so`    | клиентский модуль, база ищется в `/proc/<pid>/maps` |
-| `socket_path`  | `/tmp/cs2esp.sock`| файл управляющего сокета |
+| `socket_path`  | `@.cs_pipe_stream` | абстрактный управляющий сокет (в памяти ядра, без файлов в `/tmp`) |
+| `stealth.*`    | —                 | маскировка имени процесса (`comm`/`cmdline`) и рандомизация класса окна |
 | `hotkey`       | `F8`              | клавиша toggle ESP (KeySym, XGrabKey) |
 | `fps_limit`    | `144`             | частота цикла чтения и оверлея |
 | `team_check`   | `true`            | `false` — рисовать и союзников (цветом `colors.teammate`) |
@@ -257,7 +258,7 @@ cs2-esp-linux/
 |---------|---------|
 | `X11: cannot open display` | в сессии нет XWayland / X-сервера |
 | `32-битный ARGB TrueColor visual не найден` | нет композитора (голый X11 без picom) |
-| `socket /tmp/cs2esp.sock is busy` | уже работает другой cs2espd |
+| `abstract socket ... is busy` | уже работает другой экземпляр демона |
 | `top-level must be an object` и т.п. | битый JSON в конфиге |
 | `offsets.json: rvas.* == 0 ...` | offsets не заполнены — см. раздел выше |
 | `waiting for cs2` | игра не запущена; это штатное сообщение |

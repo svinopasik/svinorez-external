@@ -10,13 +10,15 @@ namespace {
 // "#RRGGBBAA" → 0xAARRGGBB (для XSetForeground); при кривом формате — fallback 0xFFFFFFFF
 unsigned parse_argb(const std::string& s) {
     if (s.size() != 9 || s[0] != '#') return 0xFFFFFFFFu;
-    auto hex4 = [](const char* p) -> unsigned {
-        char buf[5] = {p[0], p[1], p[2], p[3], '\0'};
+    auto hex2 = [](const char* p) -> unsigned {
+        char buf[3] = {p[0], p[1], '\0'};
         return static_cast<unsigned>(std::strtoul(buf, nullptr, 16));
     };
-    const unsigned rgb = hex4(s.c_str() + 1);
-    const unsigned a = hex4(s.c_str() + 7);
-    return (a << 24) | rgb;
+    const unsigned r = hex2(s.c_str() + 1);
+    const unsigned g = hex2(s.c_str() + 3);
+    const unsigned b = hex2(s.c_str() + 5);
+    const unsigned a = hex2(s.c_str() + 7);
+    return (a << 24) | (r << 16) | (g << 8) | b;
 }
 
 // Мировая точка → экран. CS2 хранит VP row-major: clip = M · [pos, 1].

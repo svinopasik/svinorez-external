@@ -81,36 +81,15 @@ std::string read_cmdline_name(int pid) {
     return basename_of(trim(tok));
 }
 
-// Ядро чтения: прямой системный вызов process_vm_readv (не оставляет открытых fd в /proc/self/fd);
-// при необходимости — fallback на pread64 через открытый дескриптор.
-bool read_full(int fd, int pid, std::uint64_t address, void* buffer, std::size_t size) {
+// Ядро чтения: исключительно прямой системный вызов process_vm_readv.
+// Никаких открытых дескрипторов /proc/<pid>/mem в /proc/self/fd/ (гарантия скрытности от VAC).
+bool read_full(int /*fd*/, int pid, std::uint64_t address, void* buffer, std::size_t size) {
     if (pid <= 0 || address == 0 || size == 0) return false;
 
-    // 1) Прямой syscall process_vm_readv: быстрый и не оставляет открытых файлов /proc/<pid>/mem
     struct iovec local{ buffer, size };
     struct iovec remote{ reinterpret_cast<void*>(address), size };
     const ssize_t m = ::process_vm_readv(pid, &local, 1, &remote, 1, 0);
-    if (m == static_cast<ssize_t>(size)) {
-        return true;
-    }
-
-    // 2) Fallback: если открыт дескриптор /proc/<pid>/mem
-    if (fd != -1) {
-        std::size_t done = (m > 0) ? static_cast<std::size_t>(m) : 0;
-        while (done < size) {
-            const ssize_t n = ::pread64(fd,
-                                        static_cast<char*>(buffer) + done,
-                                        size - done,
-                                        static_cast<off64_t>(address + done));
-            if (n > 0) {
-                done += static_cast<std::size_t>(n);
-                continue;
-            }
-            return false;
-        }
-        return true;
-    }
-    return false;
+    return (m == static_cast<ssize_t>(size));
 }
 
 } // namespace
@@ -175,8 +154,8 @@ bool ProcessMemory::open(const std::string& process_name, std::string& error) {
 
     pid_ = matches.front();
 
-    // Проверяем, доступен ли syscall process_vm_readv для этого PID.
-    // Если доступен — не открываем /proc/<pid>/mem fd, чтобы дескриптор не светился в /proc/<self>/fd.
+    // Проверяем доступность прямого syscall process_vm_readv для целевого PID.
+    // Прямой syscall не создает дескрипторов в /proc/self/fd/.
     char probe_buf[8];
     struct iovec local{ probe_buf, sizeof(probe_buf) };
     struct iovec remote{ reinterpret_cast<void*>(0x10000), sizeof(probe_buf) };
@@ -188,16 +167,11 @@ bool ProcessMemory::open(const std::string& process_name, std::string& error) {
         return true;
     }
 
-    // Fallback: если ptrace_scope ограничил process_vm_readv, открываем /proc/<pid>/mem
-    const std::string path = "/proc/" + std::to_string(pid_) + "/mem";
-    fd_ = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
-    if (fd_ == -1) {
-        error = "open(" + path + ", O_RDONLY) failed: " + errno_text(errno);
-        pid_ = 0;
-        return false;
-    }
-    error.clear();
-    return true;
+    // Для предотвращения детекта античитом через чтение /proc/self/fd
+    // мы НЕ открываем /proc/<pid>/mem fallback.
+    error = "process_vm_readv denied (EPERM). To protect your account from /proc/self/fd detection, fallback to /proc/<pid>/mem is disabled. Run 'echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope' or 'sudo setcap cap_sys_ptrace=eip <binary>'";
+    pid_ = 0;
+    return false;
 }
 
 std::uint64_t ProcessMemory::module_base(const std::string& module_name) const {

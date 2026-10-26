@@ -22,15 +22,15 @@ const std::vector<std::string> kAimbotHotkeys = {
     "always", "alt", "shift", "ctrl", "caps", "c", "v", "x", "z", "mouse1", "mouse2"
 };
 const std::vector<std::string> kBones = {"head", "chest"};
-const std::vector<float> kAimbotFovs = {40.0f, 60.0f, 80.0f, 120.0f, 160.0f, 200.0f, 250.0f, 300.0f};
-const std::vector<float> kAimbotSmooths = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 7.0f, 10.0f, 15.0f};
+const std::vector<float> kAimbotFovs = {20.0f, 35.0f, 50.0f, 80.0f, 120.0f, 160.0f, 200.0f, 250.0f};
+const std::vector<float> kAimbotSmooths = {2.0f, 5.0f, 10.0f, 15.0f, 20.0f, 25.0f, 30.0f};
 
 const std::vector<std::string> kTriggerHotkeys = {
     "always", "alt", "shift", "ctrl", "caps", "x", "c", "v", "z", "mouse1", "mouse2"
 };
-const std::vector<int> kPreDelays = {0, 5, 10, 15, 20, 25, 30, 40, 50};
-const std::vector<int> kPostDelays = {10, 15, 20, 25, 30, 40, 50};
-const std::vector<int> kCooldowns = {60, 80, 100, 120, 150, 200, 250, 300};
+const std::vector<int> kPreDelays = {0, 20, 50, 100, 150, 190, 220, 250, 300};
+const std::vector<int> kPostDelays = {20, 35, 50, 65, 80};
+const std::vector<int> kCooldowns = {100, 150, 200, 250, 300, 350, 450};
 const std::vector<float> kMaxDists = {0.0f, 1000.0f, 2000.0f, 3000.0f, 5000.0f, 8000.0f};
 const std::vector<int> kFpsLimits = {60, 120, 144, 165, 240, 360};
 const std::vector<std::string> kEspHotkeys = {"F8", "F7", "F9", "F10", "F11", "F12"};

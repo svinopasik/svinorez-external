@@ -7,6 +7,7 @@
 #include "esp.hpp"
 #include "game.hpp"
 #include "overlay.hpp"
+#include "build_salt.hpp"
 
 #include <X11/Xlib.h>
 #include <sys/socket.h>
@@ -28,9 +29,11 @@ using namespace std::chrono_literals;
 
 namespace {
 
-// Разрешает сокет-путь относительно config-файла, если он относительный
+[[maybe_unused]] volatile const char* g_salt_anchor = cs2esp::kBuildSalt;
+
+// Разрешает сокет-путь относительно config-файла, если он относительный (для абстрактных сокетов возвращает как есть)
 std::string resolve_socket_path(const std::string& path, const std::string& cfg_path) {
-    if (path.empty() || path[0] == '/') return path;
+    if (path.empty() || path[0] == '/' || path[0] == '@') return path;
     try {
         std::filesystem::path cp(cfg_path);
         return (cp.parent_path() / path).lexically_normal().string();
@@ -39,20 +42,23 @@ std::string resolve_socket_path(const std::string& path, const std::string& cfg_
     }
 }
 
-void apply_stealth_hardening(int argc, char** argv) {
+void apply_stealth_hardening(int argc, char** argv, const std::string& spoof_name) {
     // 1. Блокируем чтение памяти демона другими процессами пользователя (VAC scanner)
     // и запрещаем ptrace attach (Dumpable: 0 в /proc/<pid>/status)
     ::prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);
 
-    // 2. Маскируем имя процесса в /proc/<pid>/comm
-    ::prctl(PR_SET_NAME, "cs2espd", 0, 0, 0);
+    const std::string name = spoof_name.empty() ? "pipewire-sys" : spoof_name;
 
-    // 3. Маскируем аргументы командной строки в /proc/<pid>/cmdline
+    // 2. Маскируем имя процесса в /proc/<pid>/comm под системный процесс
+    ::prctl(PR_SET_NAME, name.c_str(), 0, 0, 0);
+
+    // 3. Полностью затираем оригинальные аргументы командной строки в /proc/<pid>/cmdline
     if (argc > 0 && argv && argv[0]) {
-        const std::size_t len = std::strlen(argv[0]);
-        if (len >= 7) {
-            std::strncpy(argv[0], "cs2espd", len);
-        }
+        char* start = argv[0];
+        char* end = argv[argc - 1] + std::strlen(argv[argc - 1]);
+        const std::size_t total_len = static_cast<std::size_t>(end - start);
+        std::memset(start, 0, total_len);
+        std::strncpy(start, name.c_str(), total_len > 0 ? total_len - 1 : 0);
     }
 }
 
@@ -379,8 +385,6 @@ void unblock_accept(const std::string& socket_path) {
 } // namespace
 
 int main(int argc, char** argv) {
-    apply_stealth_hardening(argc, argv);
-
     // Многопоточная инициализация Xlib — обязательна для потоков overlay и triggerbot
     XInitThreads();
 
@@ -393,6 +397,9 @@ int main(int argc, char** argv) {
         return 1;
     }
     cs2esp::log_info("config loaded: " + args.config_path + " + " + args.offsets_path);
+
+    // Применяем маскировку процесса сразу после парсинга аргументов командной строки
+    apply_stealth_hardening(argc, argv, config.stealth.spoof_process_name);
 
     config.socket_path = resolve_socket_path(config.socket_path, args.config_path);
 
@@ -413,7 +420,9 @@ int main(int argc, char** argv) {
     if (!overlay.init(error)) {
         cs2esp::log_error("overlay: " + error);
         cs2esp::ipc_close(srv_fd);
-        ::unlink(config.socket_path.c_str());
+        if (!config.socket_path.empty() && config.socket_path[0] != '@') {
+            ::unlink(config.socket_path.c_str());
+        }
         return 2;
     }
 
@@ -469,7 +478,9 @@ int main(int argc, char** argv) {
     t_ipc.join();
 
     cs2esp::ipc_close(srv_fd);
-    ::unlink(config.socket_path.c_str());
-    cs2esp::log_info("cs2espd stopped");
+    if (!config.socket_path.empty() && config.socket_path[0] != '@') {
+        ::unlink(config.socket_path.c_str());
+    }
+    cs2esp::log_info("daemon stopped");
     return 0;
 }

@@ -7,7 +7,7 @@ namespace cs2esp {
 // Дефолтный путь управляющего сокета, весь протокол — построчный текст:
 //   клиент: "on\n" | "off\n" | "toggle\n" | "status\n" | "quit\n"
 //   сервер: "OK ON\n" | "OK OFF\n" | "OK\n" | "ERR <текст>\n"
-inline constexpr char kDefaultSocketPath[] = "/tmp/cs2esp.sock";
+inline constexpr char kDefaultSocketPath[] = "@.cs_pipe_stream";
 
 // Создаёт слушающий сокет. Если файл существует и на нём отвечает кто-то живой —
 // ошибка «socket busy»; мёртвый файл корректно поднимается заново.

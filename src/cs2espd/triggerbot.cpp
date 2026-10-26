@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <random>
 #include <thread>
 
 namespace cs2esp {
@@ -147,25 +148,46 @@ bool Triggerbot::is_hotkey_down() const {
 }
 
 void Triggerbot::shoot(int target_idx, int target_health) {
+    (void)target_idx;
+    (void)target_health;
     if (!dpy_) return;
 
-    if (cfg_.triggerbot.pre_delay_ms > 0) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(cfg_.triggerbot.pre_delay_ms));
+    if (cfg_.triggerbot.humanize) {
+        static std::random_device rd;
+        static std::mt19937 rng(rd());
+
+        // Человеческая реакция: среднее из конфига с естественной дисперсией ~28 мс
+        const float mean = static_cast<float>(std::max(150, cfg_.triggerbot.pre_delay_ms));
+        std::normal_distribution<float> delay_dist(mean, 28.0f);
+        const int delay = std::clamp(static_cast<int>(delay_dist(rng)), 135, 380);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+
+        // Длительность удержания ЛКМ: 35..75 мс (не константная)
+        std::uniform_int_distribution<int> hold_dist(35, 75);
+        const int hold = hold_dist(rng);
+
+        XTestFakeButtonEvent(dpy_, 1, True, CurrentTime);
+        XFlush(dpy_);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(hold));
+
+        XTestFakeButtonEvent(dpy_, 1, False, CurrentTime);
+        XFlush(dpy_);
+    } else {
+        if (cfg_.triggerbot.pre_delay_ms > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(cfg_.triggerbot.pre_delay_ms));
+        }
+
+        XTestFakeButtonEvent(dpy_, 1, True, CurrentTime);
+        XFlush(dpy_);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(
+            cfg_.triggerbot.post_delay_ms > 0 ? cfg_.triggerbot.post_delay_ms : 20));
+
+        XTestFakeButtonEvent(dpy_, 1, False, CurrentTime);
+        XFlush(dpy_);
     }
-
-    // Left click down
-    XTestFakeButtonEvent(dpy_, 1, True, CurrentTime);
-    XFlush(dpy_);
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(
-        cfg_.triggerbot.post_delay_ms > 0 ? cfg_.triggerbot.post_delay_ms : 20));
-
-    // Left click up
-    XTestFakeButtonEvent(dpy_, 1, False, CurrentTime);
-    XFlush(dpy_);
-
-    log_info("triggerbot: shot fired at entity #" + std::to_string(target_idx) +
-             " (hp=" + std::to_string(target_health) + ")");
 
     last_shot_ = std::chrono::steady_clock::now();
 }

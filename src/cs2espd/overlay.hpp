@@ -43,6 +43,8 @@ public:
     void open_menu()   { menu_open_req_.store(true); }
     void close_menu()  { menu_close_req_.store(true); }
 
+    const std::string& window_class() const { return window_class_; }
+
 private:
     void create_window();
     void destroy_window();
@@ -108,6 +110,7 @@ private:
     std::atomic<int> width_{0}, height_{0};
     std::vector<IRect> last_drawn_;
     int frame_counter_ = 0;
+    std::string window_class_;
 };
 
 } // namespace cs2esp

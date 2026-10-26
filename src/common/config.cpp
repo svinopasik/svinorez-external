@@ -151,6 +151,11 @@ bool load_config(const std::string& config_file,
             return false;
         }
 
+        if (const json::Value* st = optional_section(root, "stealth", config_file, error)) {
+            get_string(*st, "spoof_process_name",    out.stealth.spoof_process_name,    config_file, error);
+            get_bool(*st,   "randomize_window_class", out.stealth.randomize_window_class, config_file, error);
+        }
+
         if (const json::Value* colors = optional_section(root, "colors", config_file, error)) {
             if (!get_color(*colors, "local",    out.color_local,    config_file, error)) return false;
             if (!get_color(*colors, "enemy",    out.color_enemy,    config_file, error)) return false;
@@ -178,6 +183,7 @@ bool load_config(const std::string& config_file,
             get_float(*ab,  "smooth",        out.aimbot.smooth,        config_file, error);
             get_bool(*ab,   "team_check",    out.aimbot.team_check,    config_file, error);
             get_bool(*ab,   "visible_check", out.aimbot.visible_check, config_file, error);
+            get_bool(*ab,   "humanize",      out.aimbot.humanize,      config_file, error);
         }
         if (out.aimbot.fov < 10.0f) out.aimbot.fov = 10.0f;
         if (out.aimbot.smooth < 1.0f) out.aimbot.smooth = 1.0f;
@@ -195,6 +201,7 @@ bool load_config(const std::string& config_file,
             get_int(*tb,    "pre_delay_ms",     out.triggerbot.pre_delay_ms,    config_file, error);
             get_int(*tb,    "post_delay_ms",    out.triggerbot.post_delay_ms,   config_file, error);
             get_int(*tb,    "cooldown_ms",      out.triggerbot.cooldown_ms,     config_file, error);
+            get_bool(*tb,   "humanize",         out.triggerbot.humanize,        config_file, error);
         }
         if (out.triggerbot.pre_delay_ms < 0) out.triggerbot.pre_delay_ms = 0;
         if (out.triggerbot.post_delay_ms < 1) out.triggerbot.post_delay_ms = 20;
@@ -299,6 +306,10 @@ bool save_config(const std::string& config_file,
       << "  \"fps_limit\": " << cfg.fps_limit << ",\n"
       << "  \"team_check\": " << (cfg.team_check ? "true" : "false") << ",\n"
       << "  \"max_distance\": " << cfg.max_distance << ",\n\n"
+      << "  \"stealth\": {\n"
+      << "    \"spoof_process_name\": \"" << cfg.stealth.spoof_process_name << "\",\n"
+      << "    \"randomize_window_class\": " << (cfg.stealth.randomize_window_class ? "true" : "false") << "\n"
+      << "  },\n\n"
       << "  \"colors\": {\n"
       << "    \"local\": \"" << cfg.color_local << "\",\n"
       << "    \"enemy\": \"" << cfg.color_enemy << "\",\n"
@@ -322,14 +333,16 @@ bool save_config(const std::string& config_file,
       << "    \"fov\": " << cfg.aimbot.fov << ",\n"
       << "    \"smooth\": " << cfg.aimbot.smooth << ",\n"
       << "    \"team_check\": " << (cfg.aimbot.team_check ? "true" : "false") << ",\n"
-      << "    \"visible_check\": " << (cfg.aimbot.visible_check ? "true" : "false") << "\n"
+      << "    \"visible_check\": " << (cfg.aimbot.visible_check ? "true" : "false") << ",\n"
+      << "    \"humanize\": " << (cfg.aimbot.humanize ? "true" : "false") << "\n"
       << "  },\n\n"
       << "  \"triggerbot\": {\n"
       << "    \"enabled\": " << (cfg.triggerbot.enabled ? "true" : "false") << ",\n"
       << "    \"hotkey\": \"" << cfg.triggerbot.hotkey << "\",\n"
       << "    \"pre_delay_ms\": " << cfg.triggerbot.pre_delay_ms << ",\n"
       << "    \"post_delay_ms\": " << cfg.triggerbot.post_delay_ms << ",\n"
-      << "    \"cooldown_ms\": " << cfg.triggerbot.cooldown_ms << "\n"
+      << "    \"cooldown_ms\": " << cfg.triggerbot.cooldown_ms << ",\n"
+      << "    \"humanize\": " << (cfg.triggerbot.humanize ? "true" : "false") << "\n"
       << "  },\n\n"
       << "  \"rcs\": {\n"
       << "    \"enabled\": " << (cfg.rcs.enabled ? "true" : "false") << ",\n"

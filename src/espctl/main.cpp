@@ -2,6 +2,7 @@
 #include "common/json.hpp"
 
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -11,7 +12,7 @@ namespace {
 void print_usage(const char* argv0) {
     std::fprintf(stderr,
                  "usage: %s <on|off|toggle|aim [on|off|toggle]|trigger [on|off|toggle]|rcs [on|off|toggle]|status|quit> [--config config/config.json]"
-                 " [--socket /tmp/cs2esp.sock]\n"
+                 " [--socket @.cs_pipe_stream]\n"
                  "  on              enable ESP\n"
                  "  off             disable ESP\n"
                  "  toggle          switch ESP state\n"
@@ -19,7 +20,7 @@ void print_usage(const char* argv0) {
                  "  trigger [state] control triggerbot (on/off/toggle, default toggle)\n"
                  "  rcs [state]     control RCS recoil control (on/off/toggle, default toggle)\n"
                  "  status          current state\n"
-                 "  quit            stop cs2espd\n",
+                 "  quit            stop daemon\n",
                  argv0);
 }
 
@@ -58,7 +59,16 @@ std::string resolve_socket_path(const std::string& explicit_socket,
     auto opt = json::parse(ss.str(), perr);
     if (opt) {
         const json::Value* sp = opt->find("socket_path");
-        if (sp && sp->is_string()) return sp->string;
+        if (sp && sp->is_string()) {
+            const std::string s = sp->string;
+            if (s.empty() || s[0] == '/' || s[0] == '@') return s;
+            try {
+                std::filesystem::path cp(config_path);
+                return (cp.parent_path() / s).lexically_normal().string();
+            } catch (...) {
+                return s;
+            }
+        }
     }
     return cs2esp::kDefaultSocketPath;
 }

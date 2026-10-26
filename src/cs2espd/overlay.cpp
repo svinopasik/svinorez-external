@@ -39,7 +39,6 @@ int x_error_handler(Display*, XErrorEvent* e) {
 
 int x_io_error_handler(Display*) {
     // libX11 fatal IO error handler (server shutdown or connection closed).
-    ::unlink("/tmp/cs2esp.sock");
     std::_Exit(1);
 }
 
@@ -116,7 +115,20 @@ Overlay::~Overlay() {
             XUngrabKey(dpy_, hotkey_keycode_, AnyModifier, root_);
         }
         destroy_window();
+        if (font_) {
+            XftFontClose(dpy_, font_);
+            font_ = nullptr;
+        }
+        if (font_color_ok_) {
+            XftColorFree(dpy_, visual_, cmap_, &font_color_);
+            font_color_ok_ = false;
+        }
+        if (cmap_) {
+            XFreeColormap(dpy_, cmap_);
+            cmap_ = 0;
+        }
         XCloseDisplay(dpy_);
+        dpy_ = nullptr;
     }
 }
 
@@ -124,12 +136,24 @@ bool Overlay::init(std::string& error) {
     XSetErrorHandler(x_error_handler);
     XSetIOErrorHandler(x_io_error_handler);
 
-    // Автоматическое отключение блюра в Hyprland при запуске оверлея
+    if (window_class_.empty()) {
+        if (cfg_.stealth.randomize_window_class) {
+            char buf[32];
+            auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+            std::snprintf(buf, sizeof(buf), "wl_srv_%04x", static_cast<unsigned>(now & 0xFFFF));
+            window_class_ = buf;
+        } else {
+            window_class_ = "x11_helper";
+        }
+    }
+
+    // Автоматическое отключение блюра в Hyprland на лету под динамический класс окна
     if (std::getenv("HYPRLAND_INSTANCE_SIGNATURE") != nullptr) {
-        ::system("hyprctl eval 'hl.window_rule({ match = { class = \"cs2esp\" }, no_blur = true, no_focus = true, no_initial_focus = true })' >/dev/null 2>&1");
-        ::system("hyprctl keyword windowrulev2 'noblur,class:^(cs2esp)$' >/dev/null 2>&1");
-        ::system("hyprctl keyword windowrulev2 'nofocus,class:^(cs2esp)$' >/dev/null 2>&1");
-        ::system("hyprctl keyword windowrulev2 'noinitialfocus,class:^(cs2esp)$' >/dev/null 2>&1");
+        std::string cmd = "hyprctl keyword windowrulev2 'noblur,class:^(" + window_class_ + ")$' >/dev/null 2>&1; "
+                          "hyprctl keyword windowrulev2 'nofocus,class:^(" + window_class_ + ")$' >/dev/null 2>&1; "
+                          "hyprctl keyword windowrulev2 'noinitialfocus,class:^(" + window_class_ + ")$' >/dev/null 2>&1";
+        [[maybe_unused]] int rc = ::system(cmd.c_str());
+        (void)rc;
     }
 
     dpy_ = XOpenDisplay(nullptr);
@@ -400,11 +424,11 @@ void Overlay::create_window() {
                              CWBorderPixel | CWEventMask,
                          &attr);
 
-    // WM_CLASS: чтобы Hyprland-правила отключали blur для оверлея
+    // WM_CLASS: динамический или маскировочный класс окна
     {
         XClassHint ch{};
-        ch.res_name  = const_cast<char*>("cs2esp");
-        ch.res_class = const_cast<char*>("cs2esp");
+        ch.res_name  = const_cast<char*>(window_class_.c_str());
+        ch.res_class = const_cast<char*>(window_class_.c_str());
         XSetClassHint(dpy_, win_, &ch);
     }
 
@@ -690,7 +714,7 @@ void Overlay::draw_box(const ScreenBox& b) {
 
 void Overlay::draw_status_text(bool esp_on, bool aimbot_on, bool trigger_on, bool rcs_on, bool attached) {
     if (!xft_draw_ || !font_ || !font_color_ok_) return;
-    std::string txt = "cs2esp: ";
+    std::string txt = "[LIVE] ";
     txt += esp_on ? "ESP:ON" : "ESP:OFF";
     txt += aimbot_on ? "  AIM:ON" : "  AIM:OFF";
     txt += trigger_on ? "  TRIGGER:ON" : "  TRIGGER:OFF";
