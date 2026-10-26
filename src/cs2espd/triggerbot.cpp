@@ -29,7 +29,7 @@ void Triggerbot::close() {
     hotkey_code_ = 0;
     always_active_ = true;
     is_mouse_hotkey_ = false;
-    mouse_mask_ = 0;
+    mouse_button_ = 0;
     cached_hotkey_.clear();
 }
 
@@ -42,36 +42,44 @@ void Triggerbot::update_hotkey() {
         always_active_ = true;
         hotkey_code_ = 0;
         is_mouse_hotkey_ = false;
-        mouse_mask_ = 0;
+        mouse_button_ = 0;
     } else if (hk == "mouse1" || hk == "lmb") {
         always_active_ = false;
         is_mouse_hotkey_ = true;
-        mouse_mask_ = Button1Mask;
+        mouse_button_ = 1;
         hotkey_code_ = 0;
     } else if (hk == "mouse2" || hk == "rmb") {
         always_active_ = false;
         is_mouse_hotkey_ = true;
-        mouse_mask_ = Button3Mask;
+        mouse_button_ = 3;
         hotkey_code_ = 0;
     } else if (hk == "mouse3" || hk == "mmb") {
         always_active_ = false;
         is_mouse_hotkey_ = true;
-        mouse_mask_ = Button2Mask;
+        mouse_button_ = 2;
         hotkey_code_ = 0;
-    } else if (hk == "mouse4") {
+    } else if (hk == "mouse4" || hk == "xbutton1" || hk == "side1" || hk == "thumb1") {
         always_active_ = false;
         is_mouse_hotkey_ = true;
-        mouse_mask_ = Button4Mask;
+        mouse_button_ = 8;
         hotkey_code_ = 0;
-    } else if (hk == "mouse5") {
+    } else if (hk == "mouse5" || hk == "xbutton2" || hk == "side2" || hk == "thumb2") {
         always_active_ = false;
         is_mouse_hotkey_ = true;
-        mouse_mask_ = Button5Mask;
+        mouse_button_ = 9;
+        hotkey_code_ = 0;
+    } else if (hk.rfind("mouse", 0) == 0 && hk.size() > 5) {
+        always_active_ = false;
+        is_mouse_hotkey_ = true;
+        int btn = std::atoi(hk.c_str() + 5);
+        if (btn == 4) btn = 8;
+        else if (btn == 5) btn = 9;
+        mouse_button_ = btn;
         hotkey_code_ = 0;
     } else {
         always_active_ = false;
         is_mouse_hotkey_ = false;
-        mouse_mask_ = 0;
+        mouse_button_ = 0;
         hotkey_code_ = resolve_hardware_keycode(dpy_, hk);
     }
 }
@@ -106,14 +114,7 @@ bool Triggerbot::is_hotkey_down() const {
     if (!dpy_) return false;
 
     if (is_mouse_hotkey_) {
-        Window root_ret = 0, child_ret = 0;
-        int rx = 0, ry = 0, wx = 0, wy = 0;
-        unsigned int mask = 0;
-        if (XQueryPointer(dpy_, DefaultRootWindow(dpy_), &root_ret, &child_ret,
-                          &rx, &ry, &wx, &wy, &mask)) {
-            return (mask & mouse_mask_) != 0;
-        }
-        return false;
+        return is_mouse_button_pressed(dpy_, mouse_button_);
     }
 
     if (hotkey_code_ == 0) return false;

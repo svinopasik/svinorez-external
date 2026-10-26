@@ -42,12 +42,12 @@ find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(XFT REQUIRED xft)  # freetype/fontconfig include paths for Xft headers
 
-foreach(comp Xext Xfixes Xrender Xft Xrandr Xtst)
+foreach(comp Xext Xfixes Xrender Xft Xrandr Xtst Xi)
     if(NOT X11_${comp}_FOUND)
         message(FATAL_ERROR
             "X11 extension '${comp}' not found. Install: libxext-dev libxfixes-dev "
-            "libxrender-dev libxft-dev libxrandr-dev libxtst-dev (Debian/Ubuntu) or "
-            "libxext libxfixes libxrender libxft libxrandr libxtst (Arch)")
+            "libxrender-dev libxft-dev libxrandr-dev libxtst-dev libxi-dev (Debian/Ubuntu) or "
+            "libxext libxfixes libxrender libxft libxrandr libxtst libxi (Arch)")
     endif()
 endforeach()
 
@@ -61,7 +61,7 @@ add_library(cs2esp_common STATIC
     src/common/privacy.cpp
 )
 target_include_directories(cs2esp_common PUBLIC include ${X11_INCLUDE_DIR})
-target_link_libraries(cs2esp_common PUBLIC ${X11_X11_LIB})
+target_link_libraries(cs2esp_common PUBLIC ${X11_X11_LIB} ${X11_Xi_LIB})
 target_compile_options(cs2esp_common PRIVATE -Wall -Wextra -Wpedantic)
 
 add_executable(cs2espd
@@ -86,6 +86,7 @@ target_link_libraries(cs2espd PRIVATE
     ${X11_Xft_LIB}
     ${X11_Xrandr_LIB}
     ${X11_Xtst_LIB}
+    ${X11_Xi_LIB}
 )
 target_compile_options(cs2espd PRIVATE -Wall -Wextra)
 

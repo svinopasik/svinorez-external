@@ -1,7 +1,9 @@
 #include "common/keymap.hpp"
 
 #include <X11/keysym.h>
+#include <X11/extensions/XInput2.h>
 #include <cctype>
+#include <cstdlib>
 
 namespace cs2esp {
 
@@ -191,6 +193,67 @@ std::string get_mouse_button_name(unsigned int button) {
         case 9: return "MOUSE5"; // Side thumb forward
         default: return "MOUSE" + std::to_string(button);
     }
+}
+
+bool is_mouse_button_pressed(Display* dpy, int button) {
+    if (!dpy || button <= 0) return false;
+
+    // Fast path: standard buttons 1..3 via core XQueryPointer
+    if (button >= 1 && button <= 3) {
+        Window root = DefaultRootWindow(dpy);
+        Window root_ret = 0, child_ret = 0;
+        int rx = 0, ry = 0, wx = 0, wy = 0;
+        unsigned int mask = 0;
+        if (XQueryPointer(dpy, root, &root_ret, &child_ret, &rx, &ry, &wx, &wy, &mask)) {
+            if (button == 1) return (mask & Button1Mask) != 0;
+            if (button == 2) return (mask & Button2Mask) != 0; // MMB
+            if (button == 3) return (mask & Button3Mask) != 0; // RMB
+        }
+        return false;
+    }
+
+    // Extended buttons (e.g. Button 8 = MOUSE4, Button 9 = MOUSE5) via XInput2
+    static int master_pointer_id = -1;
+    if (master_pointer_id == -1) {
+        int ndevices = 0;
+        XIDeviceInfo* info = XIQueryDevice(dpy, XIAllMasterDevices, &ndevices);
+        if (info) {
+            for (int i = 0; i < ndevices; ++i) {
+                if (info[i].use == XIMasterPointer) {
+                    master_pointer_id = info[i].deviceid;
+                    break;
+                }
+            }
+            XIFreeDeviceInfo(info);
+        }
+        if (master_pointer_id == -1) master_pointer_id = 2; // Default Virtual core pointer
+    }
+
+    Window root = DefaultRootWindow(dpy);
+    Window child = 0;
+    double rx = 0, ry = 0, wx = 0, wy = 0;
+    XIButtonState buttons{};
+    XIModifierState mods{};
+    XIGroupState group{};
+
+    bool pressed = false;
+    if (XIQueryPointer(dpy, master_pointer_id, root, &root, &child,
+                       &rx, &ry, &wx, &wy, &buttons, &mods, &group)) {
+        if (buttons.mask) {
+            const int max_btn = buttons.mask_len * 8;
+            if (button < max_btn && XIMaskIsSet(buttons.mask, button)) {
+                pressed = true;
+            } else if (button == 8 && 4 < max_btn && XIMaskIsSet(buttons.mask, 4)) {
+                pressed = true; // Fallback for remaps
+            } else if (button == 9 && 5 < max_btn && XIMaskIsSet(buttons.mask, 5)) {
+                pressed = true; // Fallback for remaps
+            }
+            std::free(buttons.mask);
+        }
+    } else {
+        master_pointer_id = -1; // Reset device cache on query failure
+    }
+    return pressed;
 }
 
 } // namespace cs2esp

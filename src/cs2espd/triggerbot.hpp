@@ -39,7 +39,7 @@ private:
     KeyCode hotkey_code_ = 0;
     bool always_active_ = true;
     bool is_mouse_hotkey_ = false;
-    unsigned int mouse_mask_ = 0;
+    int mouse_button_ = 0;
 
     std::chrono::steady_clock::time_point last_shot_{};
 };

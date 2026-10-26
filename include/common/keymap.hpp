@@ -17,4 +17,9 @@ std::string get_key_name(KeySym sym, unsigned int keycode = 0);
 // Returns a clean name for a mouse button (e.g. "MOUSE1", "MOUSE2", "MOUSE3", "MOUSE4", "MOUSE5").
 std::string get_mouse_button_name(unsigned int button);
 
+// Returns true if the specified mouse button is currently held down.
+// Supports button 1 (LMB), 2 (MMB), 3 (RMB), 8 (MOUSE4 / side back), 9 (MOUSE5 / side forward),
+// and any other physical buttons reported via XInput2.
+bool is_mouse_button_pressed(Display* dpy, int button);
+
 } // namespace cs2esp

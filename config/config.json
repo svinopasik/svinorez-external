@@ -31,18 +31,18 @@
   },
 
   "aimbot": {
-    "enabled": false,
-    "hotkey": "c",
-    "bone": "chest",
-    "fov": 35,
-    "smooth": 20,
+    "enabled": true,
+    "hotkey": "MOUSE5",
+    "bone": "head",
+    "fov": 119,
+    "smooth": 2,
     "team_check": true,
-    "visible_check": true,
+    "visible_check": false,
     "humanize": true
   },
 
   "triggerbot": {
-    "enabled": false,
+    "enabled": true,
     "hotkey": "alt",
     "pre_delay_ms": 190,
     "post_delay_ms": 55,
