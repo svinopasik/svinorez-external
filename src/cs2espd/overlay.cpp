@@ -127,8 +127,8 @@ void configure_hyprland_overlay_rules(const std::string& window_class) {
 
 Overlay::Overlay(Config& cfg, std::string config_path,
                  std::atomic<bool>& esp_on, std::atomic<bool>& aimbot_on,
-                 std::atomic<bool>& trigger_on, std::atomic<bool>& rcs_on)
-    : cfg_(cfg), menu_(cfg, std::move(config_path), esp_on, aimbot_on, trigger_on, rcs_on) {}
+                 std::atomic<bool>& trigger_on)
+    : cfg_(cfg), menu_(cfg, std::move(config_path), esp_on, aimbot_on, trigger_on) {}
 
 Overlay::~Overlay() {
     if (dpy_) {
@@ -730,13 +730,12 @@ void Overlay::draw_box(const ScreenBox& b) {
     }
 }
 
-void Overlay::draw_status_text(bool esp_on, bool aimbot_on, bool trigger_on, bool rcs_on, bool attached) {
+void Overlay::draw_status_text(bool esp_on, bool aimbot_on, bool trigger_on, bool attached) {
     if (!xft_draw_ || !font_ || !font_color_ok_) return;
     std::string txt = "[LIVE] ";
     txt += esp_on ? "ESP:ON" : "ESP:OFF";
     txt += aimbot_on ? "  AIM:ON" : "  AIM:OFF";
     txt += trigger_on ? "  TRIGGER:ON" : "  TRIGGER:OFF";
-    txt += rcs_on ? "  RCS:ON" : "  RCS:OFF";
     txt += "  |  [INS] Menu";
     if (!attached) txt += " (no cs2)";
 
@@ -750,7 +749,7 @@ void Overlay::draw_status_text(bool esp_on, bool aimbot_on, bool trigger_on, boo
                       static_cast<int>(txt.size()));
 }
 
-bool Overlay::frame(const std::vector<ScreenBox>& boxes, bool esp_on, bool aimbot_on, bool trigger_on, bool rcs_on, bool attached) {
+bool Overlay::frame(const std::vector<ScreenBox>& boxes, bool esp_on, bool aimbot_on, bool trigger_on, bool attached) {
     if (cfg_.hotkey != cached_hotkey_) {
         setup_hotkey();
     }
@@ -815,7 +814,7 @@ bool Overlay::frame(const std::vector<ScreenBox>& boxes, bool esp_on, bool aimbo
     last_drawn_.clear();
 
     if (cfg_.esp.show_status_text) {
-        draw_status_text(esp_on, aimbot_on, trigger_on, rcs_on, attached);
+        draw_status_text(esp_on, aimbot_on, trigger_on, attached);
     }
 
     if (esp_on) {

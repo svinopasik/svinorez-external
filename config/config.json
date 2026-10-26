@@ -48,12 +48,5 @@
     "post_delay_ms": 55,
     "cooldown_ms": 350,
     "humanize": true
-  },
-
-  "rcs": {
-    "enabled": false,
-    "scale_x": 0.8,
-    "scale_y": 0.8,
-    "sensitivity": 1.5
   }
 }

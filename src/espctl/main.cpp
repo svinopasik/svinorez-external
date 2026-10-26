@@ -11,14 +11,13 @@ namespace {
 
 void print_usage(const char* argv0) {
     std::fprintf(stderr,
-                 "usage: %s <on|off|toggle|aim [on|off|toggle]|trigger [on|off|toggle]|rcs [on|off|toggle]|status|quit> [--config config/config.json]"
+                 "usage: %s <on|off|toggle|aim [on|off|toggle]|trigger [on|off|toggle]|status|quit> [--config config/config.json]"
                  " [--socket @.cs_pipe_stream]\n"
                  "  on              enable ESP\n"
                  "  off             disable ESP\n"
                  "  toggle          switch ESP state\n"
                  "  aim [state]     control aimbot (on/off/toggle, default toggle)\n"
                  "  trigger [state] control triggerbot (on/off/toggle, default toggle)\n"
-                 "  rcs [state]     control RCS recoil control (on/off/toggle, default toggle)\n"
                  "  status          current state\n"
                  "  quit            stop daemon\n",
                  argv0);
@@ -120,16 +119,6 @@ int main(int argc, char** argv) {
         } else {
             cmd = "trigger toggle";
         }
-    } else if (cmd == "rcs") {
-        if (!subcmd.empty()) {
-            if (subcmd != "on" && subcmd != "off" && subcmd != "toggle") {
-                print_usage(argv[0]);
-                return 2;
-            }
-            cmd = "rcs " + subcmd;
-        } else {
-            cmd = "rcs toggle";
-        }
     } else if (!subcmd.empty()) {
         print_usage(argv[0]);
         return 2;
@@ -139,8 +128,7 @@ int main(int argc, char** argv) {
         (cmd != "on" && cmd != "off" && cmd != "toggle" &&
          cmd != "status" && cmd != "quit" &&
          cmd != "aim on" && cmd != "aim off" && cmd != "aim toggle" &&
-         cmd != "trigger on" && cmd != "trigger off" && cmd != "trigger toggle" &&
-         cmd != "rcs on" && cmd != "rcs off" && cmd != "rcs toggle")) {
+         cmd != "trigger on" && cmd != "trigger off" && cmd != "trigger toggle")) {
         print_usage(argv[0]);
         return 2;
     }

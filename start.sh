@@ -50,8 +50,7 @@ if [ -f "/proc/sys/kernel/yama/ptrace_scope" ]; then
     SCOPE=$(cat /proc/sys/kernel/yama/ptrace_scope 2>/dev/null || echo "1")
     if [ "$SCOPE" != "0" ]; then
         if ! getcap build/cs2espd 2>/dev/null | grep -q "cap_sys_ptrace"; then
-            echo -e "${YELLOW}[*] Настройка прав CAP_SYS_PTRACE для прямого чтения памяти без следов в /proc/self/fd...${NC}"
-            sudo setcap cap_sys_ptrace=eip build/cs2espd 2>/dev/null || echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope >/dev/null 2>&1 || true
+            sudo -n setcap cap_sys_ptrace=eip build/cs2espd 2>/dev/null || true
         fi
     fi
 fi

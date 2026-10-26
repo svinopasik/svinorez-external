@@ -206,15 +206,6 @@ bool load_config(const std::string& config_file,
         if (out.triggerbot.pre_delay_ms < 0) out.triggerbot.pre_delay_ms = 0;
         if (out.triggerbot.post_delay_ms < 1) out.triggerbot.post_delay_ms = 20;
         if (out.triggerbot.cooldown_ms < 1) out.triggerbot.cooldown_ms = 100;
-
-        // Параметры rcs (Recoil Control System)
-        if (const json::Value* rc = optional_section(root, "rcs", config_file, error)) {
-            get_bool(*rc,  "enabled",     out.rcs.enabled,     config_file, error);
-            get_float(*rc, "scale_x",     out.rcs.scale_x,     config_file, error);
-            get_float(*rc, "scale_y",     out.rcs.scale_y,     config_file, error);
-            get_float(*rc, "sensitivity", out.rcs.sensitivity, config_file, error);
-        }
-        if (out.rcs.sensitivity < 0.01f) out.rcs.sensitivity = 2.0f;
     }
 
     // --- offsets.json ---
@@ -264,12 +255,6 @@ bool load_config(const std::string& config_file,
             if (!get_u64(*pawn, "m_hController",      o.pawn_controller_handle,   offsets_file, error)) return false;
             get_u64(*pawn, "m_iIDEntIndex", o.pawn_ident_index, offsets_file, error);
             get_u64(*pawn, "m_entitySpottedState", o.pawn_entity_spotted_state, offsets_file, error);
-            get_u64(*pawn, "m_pAimPunchServices", o.pawn_aim_punch_services, offsets_file, error);
-            get_u64(*pawn, "m_iShotsFired", o.pawn_shots_fired, offsets_file, error);
-        }
-
-        if (const json::Value* ap = optional_section(root, "aim_punch", offsets_file, error)) {
-            get_u64(*ap, "m_predictableBaseAngle", o.aim_punch_angle, offsets_file, error);
         }
 
         if (const json::Value* node = optional_section(root, "game_scene_node", offsets_file, error)) {
@@ -343,12 +328,6 @@ bool save_config(const std::string& config_file,
       << "    \"post_delay_ms\": " << cfg.triggerbot.post_delay_ms << ",\n"
       << "    \"cooldown_ms\": " << cfg.triggerbot.cooldown_ms << ",\n"
       << "    \"humanize\": " << (cfg.triggerbot.humanize ? "true" : "false") << "\n"
-      << "  },\n\n"
-      << "  \"rcs\": {\n"
-      << "    \"enabled\": " << (cfg.rcs.enabled ? "true" : "false") << ",\n"
-      << "    \"scale_x\": " << cfg.rcs.scale_x << ",\n"
-      << "    \"scale_y\": " << cfg.rcs.scale_y << ",\n"
-      << "    \"sensitivity\": " << cfg.rcs.sensitivity << "\n"
       << "  }\n"
       << "}\n";
 

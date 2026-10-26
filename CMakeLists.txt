@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 project(svinorez-external
     VERSION 0.1.1
-    DESCRIPTION "External Linux tool for CS2 (ESP, Aimbot, Triggerbot, RCS, GUI)"
+    DESCRIPTION "External Linux tool for CS2 (ESP, Aimbot, Triggerbot, GUI)"
     LANGUAGES CXX
 )
 
@@ -70,7 +70,6 @@ add_executable(cs2espd
     src/cs2espd/overlay.cpp
     src/cs2espd/triggerbot.cpp
     src/cs2espd/aimbot.cpp
-    src/cs2espd/rcs.cpp
     src/cs2espd/menu.cpp
 )
 target_include_directories(cs2espd PRIVATE ${XFT_INCLUDE_DIRS})

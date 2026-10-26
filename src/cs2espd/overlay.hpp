@@ -20,14 +20,14 @@ class Overlay {
 public:
     Overlay(Config& cfg, std::string config_path,
             std::atomic<bool>& esp_on, std::atomic<bool>& aimbot_on,
-            std::atomic<bool>& trigger_on, std::atomic<bool>& rcs_on);
+            std::atomic<bool>& trigger_on);
     ~Overlay();
 
     bool init(std::string& error);
 
     // Один кадр: события X (в т.ч. hotkey, меню), стирание прошлого, отрисовка нового.
     // false — X-соединение потеряно, поток рисования завершается.
-    bool frame(const std::vector<ScreenBox>& boxes, bool esp_on, bool aimbot_on, bool trigger_on, bool rcs_on, bool attached);
+    bool frame(const std::vector<ScreenBox>& boxes, bool esp_on, bool aimbot_on, bool trigger_on, bool attached);
 
     // true, если F8 нажата с прошлого вызова
     bool consume_toggle();
@@ -62,7 +62,7 @@ private:
     void clamp_to(int& x, int& y, int& w, int& h) const;
 
     void draw_box(const ScreenBox& b);
-    void draw_status_text(bool esp_on, bool aimbot_on, bool trigger_on, bool rcs_on, bool attached);
+    void draw_status_text(bool esp_on, bool aimbot_on, bool trigger_on, bool attached);
     void track_last_rect(int x0, int y0, int x1, int y1);
 
     struct IRect {

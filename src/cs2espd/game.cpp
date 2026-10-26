@@ -122,37 +122,6 @@ bool Game::read_pawn_spotted(std::uint64_t pawn) const {
     return false;
 }
 
-bool Game::read_local_recoil(int& shots_fired, Vec2& punch) const {
-    shots_fired = 0;
-    punch = {0.0f, 0.0f};
-
-    const std::uint64_t pawn = local_pawn_.load();
-    const Offsets& o = cfg_.offsets;
-    if (pawn == 0 || o.pawn_shots_fired == 0) return false;
-
-    std::int32_t shots = 0;
-    if (!mem_.read_quiet(pawn + o.pawn_shots_fired, &shots, sizeof(shots))) {
-        return false;
-    }
-    shots_fired = shots;
-
-    if (o.pawn_aim_punch_services == 0) return true;
-
-    std::uint64_t punch_svc = 0;
-    if (!mem_.read_quiet(pawn + o.pawn_aim_punch_services, &punch_svc, sizeof(punch_svc)) || punch_svc == 0) {
-        return true;
-    }
-
-    // m_predictableBaseAngle (QAngle: pitch, yaw, roll)
-    const std::uint64_t angle_off = (o.aim_punch_angle > 0) ? o.aim_punch_angle : 80;
-    float angles[3] = {0.0f, 0.0f, 0.0f};
-    if (mem_.read_quiet(punch_svc + angle_off, angles, sizeof(angles))) {
-        punch.x = angles[0]; // pitch (negative when kicked up)
-        punch.y = angles[1]; // yaw (horizontal displacement)
-    }
-    return true;
-}
-
 // m_iszPlayerName in CS2 is an inline string inside CBasePlayerController (not a pointer).
 // Direct read from controller + offset.
 std::string Game::read_pawn_name(std::uint64_t pawn) const {
@@ -362,7 +331,6 @@ void Game::update(Snapshot& out) {
                             out.have_local = true;
                             out.local_team = team;
                             out.local_origin = lo;
-                            read_local_recoil(out.local_shots_fired, out.local_punch);
                         } else {
                             log_throttled("game.local_origin", 5, LogLevel::Warn,
                                           "cannot read local pawn origin");

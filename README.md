@@ -3,7 +3,7 @@
 > [!NOTE]
 > Основное окружение разработки и тестирования — **Arch Linux + Hyprland (XWayland)**. Для корректной работы прозрачного оверлея требуется X11/XWayland с композитором, поддерживающим 32-битный ARGB TrueColor visual.
 
-Внешний (external) ESP, Aimbot, Triggerbot и RCS для Counter-Strike 2 на Linux.
+Внешний (external) ESP, Aimbot и Triggerbot для Counter-Strike 2 на Linux.
 Демон `cs2espd` читает память процесса игры через прямой системный вызов `process_vm_readv` и рисует боксы, скелеты и информацию об игроках в прозрачном X11-оверлее поверх XWayland. Управление осуществляется через интерактивное GUI-меню (клавиша `Insert`), CLI-утилиту `espctl` и горячую клавишу `F8`.
 
 Код в процесс игры не внедряется (no injection), ядро не модифицируется, ptrace для записи не используется.
@@ -17,11 +17,10 @@ svinorez-external
   │    ├─ esp        — world-to-screen, скелеты (24 кости / 18 связок), боксы, дистанция, здоровье
   │    ├─ aimbot     — выбор кости (голова/грудь), FOV, smooth-доводка, visible check, humanize-джиттер
   │    ├─ triggerbot — чтение crosshair ID (m_iIDEntIndex), team check, эмуляция клика через XTest
-  │    ├─ rcs        — recoil control system: компенсация отдачи по углам punch angle через XTest
   │    ├─ overlay    — X11 ARGB окно (override_redirect), XShape input clipping, шрифт Xft, Hyprland socket IPC
-  │    ├─ menu       — интерактивное 5-вкладочное GUI-меню (Insert): ESP, Aimbot, Triggerbot, RCS, Binds
+  │    ├─ menu       — интерактивное 4-вкладочное GUI-меню (Insert): ESP, Aimbot, Triggerbot, Binds
   │    └─ ipc        — абстрактный Unix-сокет @.cs_pipe_stream, XGrabKey(F8), SIGUSR1
-  ├─ espctl          — CLI-управление: on / off / toggle / aim / trigger / rcs / status / quit
+  ├─ espctl          — CLI-управление: on / off / toggle / aim / trigger / status / quit
   └─ common          — memory (process_vm_readv), keymap (PC105 сканкоды + Keysym), config (JSON), логгер
 ```
 
@@ -35,7 +34,7 @@ svinorez-external
 - `libXrender` — альфа-композитинг и визуализаторы
 - `libXrandr` — определение геометрии мониторов и авто-привязка к монитору с игрой
 - `libXft` — рендеринг шрифтов через FreeType2 и Fontconfig
-- `libXtst` — расширение XTest для эмуляции ввода (доводка аимбота, выстрел триггербота, компенсация RCS)
+- `libXtst` — расширение XTest для эмуляции ввода (доводка аимбота, выстрел триггербота)
 - `pthread`
 
 ### Debian / Ubuntu
@@ -64,7 +63,7 @@ sudo pacman -S --needed base-devel cmake pkgconf \
 ```
 
 В игре:
-- **`[INSERT]`** — открыть / закрыть интерактивное меню (вкладки: ESP, AIMBOT, TRIGGERBOT, RCS, BINDS & MISC).
+- **`[INSERT]`** — открыть / закрыть интерактивное меню (вкладки: ESP, AIMBOT, TRIGGERBOT, BINDS & MISC).
 - **`[F8]`** — быстрое включение / выключение ESP.
 - `Стрелки вверх/вниз` — навигация по строкам меню.
 - `Стрелки влево/вправо` — переключение вкладок или изменение значений слайдеров.
@@ -88,7 +87,7 @@ cmake --build build -j$(nproc)
 
 # Запрос текущего статуса
 ./build/espctl status
-# Вывод: OK ESP:ON AIM:OFF TRIGGER:OFF RCS:OFF MENU:CLOSED
+# Вывод: OK ESP:ON AIM:OFF TRIGGER:OFF MENU:CLOSED
 
 # Управление модулем ESP
 ./build/espctl on
@@ -105,11 +104,6 @@ cmake --build build -j$(nproc)
 ./build/espctl trigger on
 ./build/espctl trigger off
 
-# Управление модулем RCS (по умолчанию toggle)
-./build/espctl rcs
-./build/espctl rcs on
-./build/espctl rcs off
-
 # Завершение работы демона
 ./build/espctl quit
 
@@ -123,7 +117,7 @@ kill -USR1 $(pidof cs2espd)
 
 ## Интерактивное меню (клавиша INSERT / INS)
 
-В оверлей встроено GUI-меню с поддержкой мыши и клавиатуры, разделенное на 5 вкладок:
+В оверлей встроено GUI-меню с поддержкой мыши и клавиатуры, разделенное на 4 вкладки:
 
 - **Вкладка [1] ESP**:
   - `ESP Master Switch`: глобальный тумблер ESP (ON/OFF).
@@ -152,13 +146,7 @@ kill -USR1 $(pidof cs2espd)
   - `Mouse Click Duration`: длительность зажатия ЛКМ (20..80 мс).
   - `Cooldown Between Shots`: интервал между сериями выстрелов (100..450 мс).
 
-- **Вкладка [4] RECOIL CONTROL (RCS)**:
-  - `RCS Master Switch`: включение/выключение компенсации отдачи.
-  - `Pitch Control (Vertical Y)`: процент вертикальной компенсации (0%..150%).
-  - `Yaw Control (Horizontal X)`: процент горизонтальной компенсации (0%..150%).
-  - `In-Game Sensitivity`: чувствительность мыши из настроек CS2 (0.5..4.0) для точного расчета углов отдачи (`sens * 0.022`).
-
-- **Вкладка [5] BINDS & MISC**:
+- **Вкладка [4] BINDS & MISC**:
   - `Menu Toggle Key`: отображение клавиши открытия меню (`[ INSERT ]`).
   - `ESP Toggle Hotkey`: горячая клавиша переключения ESP (`F7`..`F12`).
   - `Aimbot Hotkey`: горячая клавиша Aimbot.
@@ -168,7 +156,7 @@ kill -USR1 $(pidof cs2espd)
 
 ### Навигация в меню:
 - **`Insert` / `Escape`** — открыть / закрыть меню.
-- **`1`, `2`, `3`, `4`, `5` или `Tab`** — быстрое переключение между вкладками.
+- **`1`, `2`, `3`, `4` или `Tab`** — быстрое переключение между вкладками.
 - **`Стрелки Вверх / Вниз`** — навигация по строкам параметров.
 - **`Стрелки Влево / Вправо`** — циклическое переключение значений и слайдеров.
 - **`Enter` или `Пробел`** — переключение чекбоксов / сохранение настроек.
@@ -230,10 +218,6 @@ kill -USR1 $(pidof cs2espd)
 | `triggerbot.post_delay_ms` | `55` | Длительность зажатия ЛКМ (мс) |
 | `triggerbot.cooldown_ms` | `350` | Задержка между повторными выстрелами (мс) |
 | `triggerbot.humanize` | `true` | Рандомизация задержек реакции по нормальному распределению |
-| `rcs.enabled` | `false` | Включение модуля компенсации отдачи (RCS) |
-| `rcs.scale_x` | `0.8` | Множитель компенсации горизонтальной отдачи (yaw) |
-| `rcs.scale_y` | `0.8` | Множитель компенсации вертикальной отдачи (pitch) |
-| `rcs.sensitivity` | `1.5` | Чувствительность мыши из игровых настроек CS2 |
 
 ### Мульти-монитор
 
@@ -266,12 +250,7 @@ kill -USR1 $(pidof cs2espd)
     "m_iTeamNum": 1367,
     "m_hController": 5188,
     "m_iIDEntIndex": 17796,
-    "m_entitySpottedState": 11544,
-    "m_pAimPunchServices": 5408,
-    "m_iShotsFired": 11592
-  },
-  "aim_punch": {
-    "m_predictableBaseAngle": 80
+    "m_entitySpottedState": 11544
   },
   "game_scene_node": {
     "m_vecAbsOrigin": 200,
@@ -301,7 +280,7 @@ kill -USR1 $(pidof cs2espd)
    - `rvas.*` — берутся из секции `libclient.so` файла `offsets.json`.
    - Поля `pawn.*`, `game_scene_node.*`, `controller.*` — из `libclient_so.json`:
      - `C_BaseEntity` (`m_pGameSceneNode`, `m_iHealth`, `m_lifeState`, `m_iTeamNum`)
-     - `C_CSPlayerPawn` (`m_iIDEntIndex`, `m_entitySpottedState`, `m_pAimPunchServices`, `m_iShotsFired`)
+     - `C_CSPlayerPawn` (`m_iIDEntIndex`, `m_entitySpottedState`)
      - `CBasePlayerController` (`m_hPawn`, `m_iszPlayerName`)
      - `CGameSceneNode` (`m_vecAbsOrigin`, `m_pBoneArray`).
 3. Перезапустите демон `cs2espd`.
@@ -339,7 +318,6 @@ svinorez-external/
     │   ├── esp.hpp / esp.cpp
     │   ├── aimbot.hpp / aimbot.cpp
     │   ├── triggerbot.hpp / triggerbot.cpp
-    │   ├── rcs.hpp / rcs.cpp
     │   ├── menu.hpp / menu.cpp
     │   └── overlay.hpp / overlay.cpp
     └── espctl/

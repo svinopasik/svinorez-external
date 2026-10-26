@@ -16,16 +16,15 @@ enum class MenuTab {
     Esp = 0,
     Aimbot = 1,
     Triggerbot = 2,
-    Rcs = 3,
-    Binds = 4,
-    Count = 5
+    Binds = 3,
+    Count = 4
 };
 
 class Menu {
 public:
     Menu(Config& cfg, std::string config_path,
          std::atomic<bool>& esp_on, std::atomic<bool>& aimbot_on,
-         std::atomic<bool>& trigger_on, std::atomic<bool>& rcs_on);
+         std::atomic<bool>& trigger_on);
     ~Menu() = default;
 
     bool is_open() const { return open_; }
@@ -62,7 +61,6 @@ private:
     std::atomic<bool>& esp_on_;
     std::atomic<bool>& aimbot_on_;
     std::atomic<bool>& trigger_on_;
-    std::atomic<bool>& rcs_on_;
 
     bool open_ = false;
     MenuTab current_tab_ = MenuTab::Esp;

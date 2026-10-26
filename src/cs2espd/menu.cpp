@@ -34,8 +34,6 @@ const std::vector<int> kCooldowns = {100, 150, 200, 250, 300, 350, 450};
 const std::vector<float> kMaxDists = {0.0f, 1000.0f, 2000.0f, 3000.0f, 5000.0f, 8000.0f};
 const std::vector<int> kFpsLimits = {60, 120, 144, 165, 240, 360};
 const std::vector<std::string> kEspHotkeys = {"F8", "F7", "F9", "F10", "F11", "F12"};
-const std::vector<float> kRcsScales = {0.0f, 0.25f, 0.5f, 0.75f, 0.85f, 1.0f, 1.15f, 1.25f, 1.5f};
-const std::vector<float> kRcsSensitivities = {0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 2.25f, 2.5f, 3.0f, 3.5f, 4.0f};
 
 template <typename T>
 int find_idx(const std::vector<T>& list, const T& val) {
@@ -63,9 +61,9 @@ void cycle_prev(const std::vector<T>& list, T& val) {
 
 Menu::Menu(Config& cfg, std::string config_path,
            std::atomic<bool>& esp_on, std::atomic<bool>& aimbot_on,
-           std::atomic<bool>& trigger_on, std::atomic<bool>& rcs_on)
+           std::atomic<bool>& trigger_on)
     : cfg_(cfg), config_path_(std::move(config_path)),
-      esp_on_(esp_on), aimbot_on_(aimbot_on), trigger_on_(trigger_on), rcs_on_(rcs_on) {}
+      esp_on_(esp_on), aimbot_on_(aimbot_on), trigger_on_(trigger_on) {}
 
 void Menu::toggle() {
     if (open_) close();
@@ -100,7 +98,6 @@ int Menu::item_count() const {
         case MenuTab::Esp:        return 9;
         case MenuTab::Aimbot:     return 8;
         case MenuTab::Triggerbot: return 7;
-        case MenuTab::Rcs:        return 5;
         case MenuTab::Binds:      return 7;
         default:                  return 0;
     }
@@ -131,8 +128,7 @@ bool Menu::handle_key(KeySym sym) {
     if (sym == XK_1 || sym == XK_KP_1) { current_tab_ = MenuTab::Esp; selected_idx_ = 0; return true; }
     if (sym == XK_2 || sym == XK_KP_2) { current_tab_ = MenuTab::Aimbot; selected_idx_ = 0; return true; }
     if (sym == XK_3 || sym == XK_KP_3) { current_tab_ = MenuTab::Triggerbot; selected_idx_ = 0; return true; }
-    if (sym == XK_4 || sym == XK_KP_4) { current_tab_ = MenuTab::Rcs; selected_idx_ = 0; return true; }
-    if (sym == XK_5 || sym == XK_KP_5) { current_tab_ = MenuTab::Binds; selected_idx_ = 0; return true; }
+    if (sym == XK_4 || sym == XK_KP_4) { current_tab_ = MenuTab::Binds; selected_idx_ = 0; return true; }
 
     if (sym == XK_Up)    { prev_item(); return true; }
     if (sym == XK_Down)  { next_item(); return true; }
@@ -175,11 +171,6 @@ void Menu::item_left() {
         else if (selected_idx_ == 4) cycle_prev(kPreDelays, cfg_.triggerbot.pre_delay_ms);
         else if (selected_idx_ == 5) cycle_prev(kPostDelays, cfg_.triggerbot.post_delay_ms);
         else if (selected_idx_ == 6) cycle_prev(kCooldowns, cfg_.triggerbot.cooldown_ms);
-    } else if (current_tab_ == MenuTab::Rcs) {
-        if (selected_idx_ == 1) rcs_on_.store(!rcs_on_.load());
-        else if (selected_idx_ == 2) cycle_prev(kRcsScales, cfg_.rcs.scale_y);
-        else if (selected_idx_ == 3) cycle_prev(kRcsScales, cfg_.rcs.scale_x);
-        else if (selected_idx_ == 4) cycle_prev(kRcsSensitivities, cfg_.rcs.sensitivity);
     } else if (current_tab_ == MenuTab::Binds) {
         if (selected_idx_ == 2) cycle_prev(kEspHotkeys, cfg_.hotkey);
         else if (selected_idx_ == 3) cycle_prev(kAimbotHotkeys, cfg_.aimbot.hotkey);
@@ -219,11 +210,6 @@ void Menu::item_right() {
         else if (selected_idx_ == 4) cycle_next(kPreDelays, cfg_.triggerbot.pre_delay_ms);
         else if (selected_idx_ == 5) cycle_next(kPostDelays, cfg_.triggerbot.post_delay_ms);
         else if (selected_idx_ == 6) cycle_next(kCooldowns, cfg_.triggerbot.cooldown_ms);
-    } else if (current_tab_ == MenuTab::Rcs) {
-        if (selected_idx_ == 1) rcs_on_.store(!rcs_on_.load());
-        else if (selected_idx_ == 2) cycle_next(kRcsScales, cfg_.rcs.scale_y);
-        else if (selected_idx_ == 3) cycle_next(kRcsScales, cfg_.rcs.scale_x);
-        else if (selected_idx_ == 4) cycle_next(kRcsSensitivities, cfg_.rcs.sensitivity);
     } else if (current_tab_ == MenuTab::Binds) {
         if (selected_idx_ == 2) cycle_next(kEspHotkeys, cfg_.hotkey);
         else if (selected_idx_ == 3) cycle_next(kAimbotHotkeys, cfg_.aimbot.hotkey);
@@ -263,11 +249,6 @@ void Menu::item_activate() {
         else if (selected_idx_ == 4) cycle_next(kPreDelays, cfg_.triggerbot.pre_delay_ms);
         else if (selected_idx_ == 5) cycle_next(kPostDelays, cfg_.triggerbot.post_delay_ms);
         else if (selected_idx_ == 6) cycle_next(kCooldowns, cfg_.triggerbot.cooldown_ms);
-    } else if (current_tab_ == MenuTab::Rcs) {
-        if (selected_idx_ == 1) rcs_on_.store(!rcs_on_.load());
-        else if (selected_idx_ == 2) cycle_next(kRcsScales, cfg_.rcs.scale_y);
-        else if (selected_idx_ == 3) cycle_next(kRcsScales, cfg_.rcs.scale_x);
-        else if (selected_idx_ == 4) cycle_next(kRcsSensitivities, cfg_.rcs.sensitivity);
     } else if (current_tab_ == MenuTab::Binds) {
         if (selected_idx_ == 2) cycle_next(kEspHotkeys, cfg_.hotkey);
         else if (selected_idx_ == 3) cycle_next(kAimbotHotkeys, cfg_.aimbot.hotkey);
@@ -289,7 +270,6 @@ bool Menu::save(std::string& err) {
     cfg_.esp.show_status_text = true;
     cfg_.aimbot.enabled = aimbot_on_.load();
     cfg_.triggerbot.enabled = trigger_on_.load();
-    cfg_.rcs.enabled = rcs_on_.load();
     return save_config(config_path_, cfg_, err);
 }
 
@@ -304,11 +284,11 @@ bool Menu::handle_click(int button, int x, int y) {
         return false;
     }
 
-    // Клик по 5 вкладкам (y: 35..65)
+    // Клик по 4 вкладкам (y: 35..65)
     if (ry >= 35 && ry <= 65) {
-        int tab_w = win_w_ / 5;
+        int tab_w = win_w_ / 4;
         int clicked_tab = rx / tab_w;
-        if (clicked_tab >= 0 && clicked_tab < 5) {
+        if (clicked_tab >= 0 && clicked_tab < 4) {
             current_tab_ = static_cast<MenuTab>(clicked_tab);
             selected_idx_ = 0;
             return true;
@@ -385,11 +365,11 @@ void Menu::draw(Display* dpy, Window win, GC gc, XftDraw* xft_draw, XftFont* fon
     XftDrawStringUtf8(xft_draw, &col_cyan_, font, x + 14, y + 21,
                       reinterpret_cast<const FcChar8*>(title), static_cast<int>(std::strlen(title)));
 
-    // 4) Вкладки (5 Tabs: ESP | AIMBOT | TRIGGERBOT | RCS | BINDS)
-    const int tab_w = (w - 4) / 5;
-    const char* tab_names[5] = {"[1] ESP", "[2] AIM", "[3] TRIGGER", "[4] RCS", "[5] BINDS"};
+    // 4) Вкладки (4 Tabs: ESP | AIMBOT | TRIGGERBOT | BINDS)
+    const int tab_w = (w - 4) / 4;
+    const char* tab_names[4] = {"[1] ESP", "[2] AIM", "[3] TRIGGER", "[4] BINDS"};
 
-    for (int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 4; ++i) {
         int tx = x + 2 + i * tab_w;
         int ty = y + 33;
         bool active = (static_cast<int>(current_tab_) == i);
@@ -446,18 +426,8 @@ void Menu::draw(Display* dpy, Window win, GC gc, XftDraw* xft_draw, XftFont* fon
         rows.push_back({"Reaction Pre-delay", "< " + std::to_string(cfg_.triggerbot.pre_delay_ms) + " ms >", false, false, false});
         rows.push_back({"Mouse Click Duration", "< " + std::to_string(cfg_.triggerbot.post_delay_ms) + " ms >", false, false, false});
         rows.push_back({"Cooldown Between Shots", "< " + std::to_string(cfg_.triggerbot.cooldown_ms) + " ms >", false, false, false});
-    } else if (current_tab_ == MenuTab::Rcs) {
-        rows.push_back({"Tab Category", "< [4] RECOIL CONTROL (RCS) (Left/Right to switch) >", false, false, false});
-        rows.push_back({"RCS Master Switch", rcs_on_.load() ? "ON" : "OFF", rcs_on_.load(), true, false});
-        char buf_y[32], buf_x[32], buf_s[32];
-        std::snprintf(buf_y, sizeof(buf_y), "< %d%% >", static_cast<int>(cfg_.rcs.scale_y * 100.0f + 0.5f));
-        std::snprintf(buf_x, sizeof(buf_x), "< %d%% >", static_cast<int>(cfg_.rcs.scale_x * 100.0f + 0.5f));
-        std::snprintf(buf_s, sizeof(buf_s), "< %.2f >", cfg_.rcs.sensitivity);
-        rows.push_back({"Pitch Control (Vertical Y)", buf_y, false, false, false});
-        rows.push_back({"Yaw Control (Horizontal X)", buf_x, false, false, false});
-        rows.push_back({"In-Game Sensitivity", buf_s, false, false, false});
     } else if (current_tab_ == MenuTab::Binds) {
-        rows.push_back({"Tab Category", "< [5] BINDS & MISC (Left/Right to switch) >", false, false, false});
+        rows.push_back({"Tab Category", "< [4] BINDS & MISC (Left/Right to switch) >", false, false, false});
         rows.push_back({"Menu Toggle Key", "[ INSERT ] (Global)", false, false, false});
         rows.push_back({"ESP Toggle Hotkey", "< " + cfg_.hotkey + " >", false, false, false});
         rows.push_back({"Aimbot Hotkey", "< " + cfg_.aimbot.hotkey + " >", false, false, false});

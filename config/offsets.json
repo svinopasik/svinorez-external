@@ -22,13 +22,7 @@
     "m_iTeamNum": 1367,
     "m_hController": 5188,
     "m_iIDEntIndex": 17796,
-    "m_entitySpottedState": 11544,
-    "m_pAimPunchServices": 5408,
-    "m_iShotsFired": 11592
-  },
-
-  "aim_punch": {
-    "m_predictableBaseAngle": 80
+    "m_entitySpottedState": 11544
   },
 
   "game_scene_node": {

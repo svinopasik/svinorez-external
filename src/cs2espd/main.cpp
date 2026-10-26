@@ -3,7 +3,6 @@
 #include "common/log.hpp"
 #include "aimbot.hpp"
 #include "triggerbot.hpp"
-#include "rcs.hpp"
 #include "esp.hpp"
 #include "game.hpp"
 #include "overlay.hpp"
@@ -74,7 +73,6 @@ std::atomic<bool> g_running{true};
 std::atomic<bool> g_esp_on{true};
 std::atomic<bool> g_aimbot_on{false};
 std::atomic<bool> g_trigger_on{false};
-std::atomic<bool> g_rcs_on{true};
 std::atomic<bool> g_quit_from_ipc{false};
 
 // --- разделяемое между игровым и рисующим потоками ---
@@ -157,11 +155,6 @@ void log_trigger_state() {
                      (g_trigger_on.load() ? "ON" : "OFF"));
 }
 
-void log_rcs_state() {
-    cs2esp::log_info(std::string("RCS state -> ") +
-                     (g_rcs_on.load() ? "ON" : "OFF"));
-}
-
 void game_loop(cs2esp::Game& game, cs2esp::Esp& esp, cs2esp::Overlay& overlay,
                const cs2esp::Config& cfg) {
     const auto frame_time = std::chrono::milliseconds(1000 / cfg.fps_limit);
@@ -202,7 +195,7 @@ void render_loop(cs2esp::Overlay& overlay, const cs2esp::Config& cfg) {
             boxes = g_shared.boxes;
         }
 
-        if (!overlay.frame(boxes, g_esp_on.load(), g_aimbot_on.load(), g_trigger_on.load(), g_rcs_on.load(), g_shared.attached.load())) {
+        if (!overlay.frame(boxes, g_esp_on.load(), g_aimbot_on.load(), g_trigger_on.load(), g_shared.attached.load())) {
             cs2esp::log_error("X connection lost — демона останавливаю");
             g_running.store(false);
             break;
@@ -243,22 +236,6 @@ void trigger_loop(cs2esp::Triggerbot& trigger) {
             trigger.tick(local_team);
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
-    }
-}
-
-void rcs_loop(cs2esp::Rcs& rcs) {
-    while (g_running.load()) {
-        if (g_rcs_on.load()) {
-            int shots = 0;
-            cs2esp::Vec2 punch{0.0f, 0.0f};
-            {
-                std::lock_guard<std::mutex> lock(g_shared.mutex);
-                shots = g_shared.snap.local_shots_fired;
-                punch = g_shared.snap.local_punch;
-            }
-            rcs.tick(shots, punch);
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(4));
     }
 }
 
@@ -306,16 +283,6 @@ void ipc_loop(int srv_fd, cs2esp::Overlay& overlay) {
                 const bool now = !g_trigger_on.load();
                 g_trigger_on.store(now);
                 reply = now ? "OK TRIGGER ON" : "OK TRIGGER OFF";
-            } else if (line == "rcs on") {
-                g_rcs_on.store(true);
-                reply = "OK RCS ON";
-            } else if (line == "rcs off") {
-                g_rcs_on.store(false);
-                reply = "OK RCS OFF";
-            } else if (line == "rcs toggle" || line == "rcs") {
-                const bool now = !g_rcs_on.load();
-                g_rcs_on.store(now);
-                reply = now ? "OK RCS ON" : "OK RCS OFF";
             } else if (line == "menu" || line == "menu toggle") {
                 overlay.toggle_menu();
                 reply = "OK MENU TOGGLED";
@@ -329,7 +296,6 @@ void ipc_loop(int srv_fd, cs2esp::Overlay& overlay) {
                 reply = std::string("OK ESP:") + (g_esp_on.load() ? "ON" : "OFF") +
                         " AIM:" + (g_aimbot_on.load() ? "ON" : "OFF") +
                         " TRIGGER:" + (g_trigger_on.load() ? "ON" : "OFF") +
-                        " RCS:" + (g_rcs_on.load() ? "ON" : "OFF") +
                         " MENU:" + (overlay.is_menu_open() ? "OPEN" : "CLOSED");
             } else if (line == "quit") {
                 reply = "OK";
@@ -354,9 +320,6 @@ void ipc_loop(int srv_fd, cs2esp::Overlay& overlay) {
             }
             if (line.rfind("trigger", 0) == 0) {
                 log_trigger_state();
-            }
-            if (line.rfind("rcs", 0) == 0) {
-                log_rcs_state();
             }
             if (line == "quit") {
                 cs2esp::log_info("quit via espctl");
@@ -409,7 +372,7 @@ int main(int argc, char** argv) {
     install_signals();
 
     cs2esp::Game game(config);
-    cs2esp::Overlay overlay(config, args.config_path, g_esp_on, g_aimbot_on, g_trigger_on, g_rcs_on);
+    cs2esp::Overlay overlay(config, args.config_path, g_esp_on, g_aimbot_on, g_trigger_on);
     if (game.pid() > 0) {
         overlay.set_game_pid(game.pid());
     }
@@ -437,18 +400,10 @@ int main(int argc, char** argv) {
     }
     g_trigger_on.store(config.triggerbot.enabled);
 
-    cs2esp::Rcs rcs(config);
-    std::string rerr;
-    if (!rcs.init(rerr)) {
-        cs2esp::log_warn("rcs init failed: " + rerr);
-    }
-    g_rcs_on.store(config.rcs.enabled);
-
     std::thread t_game([&] { game_loop(game, esp, overlay, config); });
     std::thread t_render([&] { render_loop(overlay, config); });
     std::thread t_aimbot([&] { aimbot_loop(aimbot, overlay); });
     std::thread t_trigger([&] { trigger_loop(trigger); });
-    std::thread t_rcs([&] { rcs_loop(rcs); });
     std::thread t_ipc([&] { ipc_loop(srv_fd, overlay); });
 
     // Головной поток: сигналы + graceful shutdown
@@ -470,7 +425,6 @@ int main(int argc, char** argv) {
     t_render.join();
     t_aimbot.join();
     t_trigger.join();
-    t_rcs.join();
     t_ipc.join();
 
     cs2esp::ipc_close(srv_fd);

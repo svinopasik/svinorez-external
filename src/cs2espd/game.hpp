@@ -42,8 +42,6 @@ struct Snapshot {
     bool have_local = false;    // локальный пешка прочитан
     int  local_team = -1;
     Vec3 local_origin;
-    int  local_shots_fired = 0; // выстрелы текущего спрея
-    Vec2 local_punch{0.f, 0.f}; // x = pitch, y = yaw (отдача)
     bool matrix_ok = false;
     Matrix4 matrix{};
     std::vector<PlayerSnap> players;
@@ -68,7 +66,6 @@ private:
     bool read_pawn_origin(std::uint64_t pawn, Vec3& out) const;
     bool read_pawn_bones(std::uint64_t pawn, std::vector<Vec3>& out) const;
     bool read_pawn_spotted(std::uint64_t pawn) const;
-    bool read_local_recoil(int& shots_fired, Vec2& punch) const;
     std::string read_pawn_name(std::uint64_t pawn) const;
     bool is_player_pawn(std::uint64_t entity);
     std::uint64_t resolve_handle(std::uint32_t handle) const;

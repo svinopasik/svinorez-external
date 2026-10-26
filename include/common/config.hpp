@@ -29,9 +29,6 @@ struct Offsets {
     std::uint64_t pawn_controller_handle = 0;   // m_hController (CHandle)
     std::uint64_t pawn_ident_index       = 17796; // m_iIDEntIndex (int32, crosshair entity ID)
     std::uint64_t pawn_entity_spotted_state = 11544; // m_entitySpottedState (0x2D18)
-    std::uint64_t pawn_aim_punch_services = 5408;  // m_pAimPunchServices (0x1520)
-    std::uint64_t pawn_shots_fired       = 11592; // m_iShotsFired (0x2D48)
-    std::uint64_t aim_punch_angle        = 80;    // m_predictableBaseAngle (0x50 in AimPunchServices)
 
     // Поля C_GameSceneNode
     std::uint64_t node_origin        = 0;   // m_vecAbsOrigin (Vector3, абсолютные мировые координаты)
@@ -95,13 +92,6 @@ struct Config {
         int cooldown_ms          = 350;      // кулдаун между выстрелами (мс)
         bool humanize            = true;     // нормальное гауссово распределение времени реакции
     } triggerbot;
-
-    struct Rcs {
-        bool enabled             = false;    // ВЫКЛЮЧЕН по умолчанию для безопасности мейна
-        float scale_x            = 0.8f;     // множитель компенсации по горизонтали (1.0 = 100%)
-        float scale_y            = 0.8f;     // множитель компенсации по вертикали (1.0 = 100%)
-        float sensitivity        = 1.5f;     // внутриигровая чувствительность мыши в CS2
-    } rcs;
 
     Offsets offsets;
 };
