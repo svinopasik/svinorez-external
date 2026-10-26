@@ -9,6 +9,19 @@
 
 namespace cs2esp {
 
+template <typename T>
+struct ReadResult {
+    T value{};
+    bool ok = false;
+
+    constexpr bool success() const noexcept { return ok; }
+    constexpr explicit operator bool() const noexcept { return ok; }
+    constexpr operator T() const noexcept { return value; }
+    constexpr const T& operator*() const noexcept { return value; }
+    constexpr const T* operator->() const noexcept { return &value; }
+    constexpr T value_or(T def) const noexcept { return ok ? value : def; }
+};
+
 // External process memory reader utilizing direct process_vm_readv syscalls
 // without maintaining open file descriptors in /proc/self/fd/.
 class ProcessMemory {
@@ -44,10 +57,15 @@ public:
     }
 
     template <typename T>
-    T read_or(std::uint64_t address, T default_value) const {
-        T value{};
-        if (!read_quiet(address, &value, sizeof(T))) return default_value;
-        return value;
+    ReadResult<T> read_or(std::uint64_t address, T default_value) const {
+        ReadResult<T> res{};
+        if (read_quiet(address, &res.value, sizeof(T))) {
+            res.ok = true;
+        } else {
+            res.value = default_value;
+            res.ok = false;
+        }
+        return res;
     }
 
     bool process_alive() const;

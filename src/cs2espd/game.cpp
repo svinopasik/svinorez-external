@@ -36,8 +36,15 @@ constexpr const char kPlayerPawnClass[] = "C_CSPlayerPawn";
 Game::Game(const Config& cfg) : cfg_(cfg) {}
 
 bool Game::read_pawn_meta(std::uint64_t pawn, int& health, int& team, bool& alive) const {
+    health = 0;
+    team = -1;
+    alive = false;
+
     const Offsets& o = cfg_.offsets;
-    if (pawn == 0 || o.pawn_health == 0 || o.pawn_life_state == 0 || o.pawn_team_num == 0) {
+    if (pawn == 0) return false;
+    if (o.pawn_health == 0 || o.pawn_life_state == 0 || o.pawn_team_num == 0) {
+        log_throttled("game.meta_offsets_missing", 10, LogLevel::Warn,
+                      "pawn meta offsets are unconfigured in offsets.json");
         return false;
     }
     const auto hp = mem_.read<std::uint32_t>(pawn + o.pawn_health);
@@ -77,8 +84,15 @@ bool Game::read_pawn_origin(std::uint64_t pawn, Vec3& out) const {
 }
 
 bool Game::read_pawn_bones(std::uint64_t pawn, std::vector<Vec3>& out) const {
+    out.clear();
+
     const Offsets& o = cfg_.offsets;
-    if (pawn == 0 || o.pawn_p_game_scene_node == 0 || o.node_bone_array == 0) return false;
+    if (pawn == 0) return false;
+    if (o.pawn_p_game_scene_node == 0 || o.node_bone_array == 0) {
+        log_throttled("game.bones_offsets_missing", 10, LogLevel::Warn,
+                      "bone offsets (game_scene_node / node_bone_array) unconfigured");
+        return false;
+    }
 
     const auto node = mem_.read<std::uint64_t>(pawn + o.pawn_p_game_scene_node);
     if (!node || *node == 0) return false;
@@ -148,25 +162,25 @@ std::string Game::read_pawn_name(std::uint64_t pawn) const {
 
 bool Game::is_player_pawn(std::uint64_t entity) {
     if (entity == 0) return false;
-    const std::uint64_t vt = mem_.read_or<std::uint64_t>(entity, 0);
-    if (vt < 0x1000) return false;
+    const auto vt = mem_.read_or<std::uint64_t>(entity, 0);
+    if (!vt.ok || vt.value < 0x1000) return false;
 
-    auto it = vtable_cache_.find(vt);
+    auto it = vtable_cache_.find(vt.value);
     if (it != vtable_cache_.end()) return it->second;
 
-    const std::uint64_t rtti = mem_.read_or<std::uint64_t>(vt - 8, 0);
-    if (rtti < 0x1000) { vtable_cache_[vt] = false; return false; }
-    const std::uint64_t name_ptr = mem_.read_or<std::uint64_t>(rtti + 8, 0);
-    if (name_ptr < 0x1000) { vtable_cache_[vt] = false; return false; }
+    const auto rtti = mem_.read_or<std::uint64_t>(vt.value - 8, 0);
+    if (!rtti.ok || rtti.value < 0x1000) { vtable_cache_[vt.value] = false; return false; }
+    const auto name_ptr = mem_.read_or<std::uint64_t>(rtti.value + 8, 0);
+    if (!name_ptr.ok || name_ptr.value < 0x1000) { vtable_cache_[vt.value] = false; return false; }
 
     char buf[48] = {};
-    if (!mem_.read_quiet(name_ptr, buf, sizeof(buf) - 1)) {
-        vtable_cache_[vt] = false;
+    if (!mem_.read_quiet(name_ptr.value, buf, sizeof(buf) - 1)) {
+        vtable_cache_[vt.value] = false;
         return false;
     }
     buf[sizeof(buf) - 1] = '\0';
     const bool is_pawn = class_name_equals(buf, kPlayerPawnClass);
-    vtable_cache_[vt] = is_pawn;
+    vtable_cache_[vt.value] = is_pawn;
     return is_pawn;
 }
 
@@ -182,7 +196,8 @@ std::uint64_t Game::resolve_handle(std::uint32_t handle) const {
     const auto bucket = mem_.read<std::uint64_t>(
         es + o.el_chunk_stride + o.el_pointer_size * chunk);
     if (!bucket || *bucket == 0) return 0;
-    return mem_.read_or<std::uint64_t>(*bucket + o.el_entity_stride * slot, 0);
+    const auto ent = mem_.read_or<std::uint64_t>(*bucket + o.el_entity_stride * slot, 0);
+    return ent.ok ? ent.value : 0;
 }
 
 void Game::walk_entity_list(Snapshot& out, std::uint64_t local_pawn) {
@@ -198,8 +213,9 @@ void Game::walk_entity_list(Snapshot& out, std::uint64_t local_pawn) {
         const std::uint64_t chunk_slot = chunk_slot_of(idx, shift);
         if (chunk_slot != cached_chunk_slot) {
             cached_chunk_slot = chunk_slot;
-            bucket_ptr = mem_.read_or<std::uint64_t>(
+            const auto b = mem_.read_or<std::uint64_t>(
                 entity_system_.load() + o.el_chunk_stride + o.el_pointer_size * chunk_slot, 0);
+            bucket_ptr = b.ok ? b.value : 0;
         }
         if (bucket_ptr == 0) {
             const std::uint64_t next_chunk_start = (chunk_slot + 1) << shift;
@@ -209,14 +225,14 @@ void Game::walk_entity_list(Snapshot& out, std::uint64_t local_pawn) {
             continue;
         }
 
-        const std::uint64_t entity = mem_.read_or<std::uint64_t>(
+        const auto entity = mem_.read_or<std::uint64_t>(
             bucket_ptr + o.el_entity_stride * slot_in_chunk_of(idx, shift), 0);
-        if (entity == 0 || entity == local_pawn) continue;
+        if (!entity.ok || entity.value == 0 || entity.value == local_pawn) continue;
 
-        if (!is_player_pawn(entity)) continue;
+        if (!is_player_pawn(entity.value)) continue;
 
         PlayerSnap p;
-        if (!read_pawn_meta(entity, p.health, p.team, p.alive)) continue;
+        if (!read_pawn_meta(entity.value, p.health, p.team, p.alive)) continue;
         if (!p.alive) continue;
         if (!read_pawn_origin(entity, p.origin)) continue;
 
