@@ -1,5 +1,6 @@
 #include "triggerbot.hpp"
 
+#include "common/keymap.hpp"
 #include "common/log.hpp"
 
 #include <X11/keysym.h>
@@ -11,42 +12,7 @@
 #include <thread>
 
 namespace cs2esp {
-namespace {
 
-int resolve_hardware_keycode(Display* dpy, const std::string& name) {
-    std::string s = name;
-    for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-
-    if (s == "alt" || s == "lalt" || s == "alt_l") return 64;
-    if (s == "ralt" || s == "alt_r") return 108;
-    if (s == "shift" || s == "lshift" || s == "shift_l") return 50;
-    if (s == "rshift" || s == "shift_r") return 62;
-    if (s == "ctrl" || s == "lctrl" || s == "control_l") return 37;
-    if (s == "rctrl" || s == "control_r") return 105;
-    if (s == "caps" || s == "capslock" || s == "caps_lock") return 66;
-    if (s == "space") return 65;
-    if (s == "tab") return 23;
-
-    if (s == "c") return 54;
-    if (s == "v") return 55;
-    if (s == "x") return 53;
-    if (s == "z") return 52;
-    if (s == "e") return 26;
-    if (s == "q") return 24;
-    if (s == "r") return 27;
-    if (s == "f") return 41;
-
-    if (dpy) {
-        KeySym sym = XStringToKeysym(name.c_str());
-        if (sym != NoSymbol) {
-            int kc = XKeysymToKeycode(dpy, sym);
-            if (kc != 0) return kc;
-        }
-    }
-    return 0;
-}
-
-} // namespace
 
 Triggerbot::Triggerbot(const Config& cfg, const Game& game)
     : cfg_(cfg), game_(game) {}

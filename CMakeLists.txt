@@ -55,8 +55,10 @@ add_library(cs2esp_common STATIC
     src/common/log.cpp
     src/common/memory.cpp
     src/common/ipc.cpp
+    src/common/keymap.cpp
 )
-target_include_directories(cs2esp_common PUBLIC include)
+target_include_directories(cs2esp_common PUBLIC include ${X11_INCLUDE_DIR})
+target_link_libraries(cs2esp_common PUBLIC ${X11_X11_LIB})
 target_compile_options(cs2esp_common PRIVATE -Wall -Wextra)
 
 add_executable(cs2espd
