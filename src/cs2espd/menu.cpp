@@ -1013,8 +1013,8 @@ void Menu::draw(Display* dpy, Window win, GC gc, XftDraw* xft_draw, XftFont* fon
     // Sidebar right divider line
     draw.add_line(x + 159, y, x + 159, y + h, draw.style().Colors[UICol_Border], 1);
 
-    // Sidebar header: Umbrella branding
-    draw.draw_sidebar_header(x, y, 160, 56, "UMBRELLA", "CS2 EXTERNAL");
+    // Sidebar header: branding
+    draw.draw_sidebar_header(x, y, 160, 56, "SVINOREZ", "CS2 EXTERNAL");
 
     // Sidebar Category Items
     const int cat_start_y = y + 65;

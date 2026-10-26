@@ -6,7 +6,7 @@
 
 namespace cs2esp {
 
-void ImGuiStyle::init_umbrella_theme() {
+void ImGuiStyle::init_theme() {
     WindowRounding = 4.0f;
     FrameRounding  = 3.0f;
     GrabRounding   = 2.0f;
@@ -15,7 +15,7 @@ void ImGuiStyle::init_umbrella_theme() {
     Colors[UICol_SidebarBg]        = argb(0xFF, 0x0E, 0x0E, 0x11); // #0e0e11 (near black)
     Colors[UICol_SidebarActive]    = argb(0xFF, 0x24, 0x12, 0x15); // #241215 (dark crimson tint)
     Colors[UICol_SidebarHover]     = argb(0xFF, 0x18, 0x18, 0x1F); // #18181f
-    Colors[UICol_SidebarIndicator] = argb(0xFF, 0xC4, 0x26, 0x26); // #c42626 (Umbrella Crimson)
+    Colors[UICol_SidebarIndicator] = argb(0xFF, 0xC4, 0x26, 0x26); // #c42626 (Crimson accent)
 
     Colors[UICol_SubtabBg]         = argb(0xFF, 0x14, 0x14, 0x17);
     Colors[UICol_SubtabActive]     = argb(0xFF, 0x1A, 0x1A, 0x22);
@@ -45,7 +45,7 @@ UIDrawList::UIDrawList(Display* dpy, Window win, GC gc, XftDraw* xft, XftFont* f
                        Visual* visual, Colormap cmap)
     : dpy_(dpy), win_(win), gc_(gc), xft_(xft), font_(font),
       visual_(visual), cmap_(cmap) {
-    style_.init_umbrella_theme();
+    style_.init_theme();
 }
 
 void UIDrawList::add_rect_filled(int x, int y, int w, int h, unsigned long color) {
@@ -128,7 +128,7 @@ void UIDrawList::draw_sidebar_header(int x, int y, int w, int h,
 
     // Red accent block / icon
     add_rect_filled(x + 14, y + 16, 18, 18, style_.Colors[UICol_SidebarIndicator]);
-    add_text_centered(x + 14, y + 16, 18, 18, col_white, "U");
+    add_text_centered(x + 14, y + 16, 18, 18, col_white, "S");
 
     // Title & subtitle
     add_text(x + 38, y + 25, col_white, title);

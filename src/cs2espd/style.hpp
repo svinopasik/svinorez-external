@@ -32,7 +32,7 @@ inline constexpr unsigned long argb(uint8_t a, uint8_t r, uint8_t g, uint8_t b) 
            static_cast<unsigned long>(b);
 }
 
-// Color indices for Umbrella theme styling
+// Color indices for UI theme styling
 enum UICol_ {
     UICol_WindowBg = 0,
     UICol_SidebarBg,
@@ -69,7 +69,7 @@ struct ImGuiStyle {
     ImVec2 ItemSpacing   = ImVec2(8.0f, 6.0f);
     unsigned long Colors[UICol_COUNT]{};
 
-    void init_umbrella_theme();
+    void init_theme();
 };
 
 // Low-level custom drawing list wrapper for X11 & Xft
@@ -87,7 +87,7 @@ public:
     void add_text_centered(int x, int y, int w, int h, XftColor* color, const std::string& text);
     void get_text_size(const std::string& text, int& w, int& h);
 
-    // Umbrella styled widgets
+    // Custom styled widgets
     void draw_sidebar_header(int x, int y, int w, int h,
                              const std::string& title, const std::string& subtitle);
 
