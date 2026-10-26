@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(svinorez-external
-    VERSION 1.0.0
+    VERSION 0.1.1
     DESCRIPTION "External Linux tool for CS2 (ESP, Aimbot, Triggerbot, RCS, GUI)"
     LANGUAGES CXX
 )
