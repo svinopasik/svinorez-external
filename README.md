@@ -1,38 +1,42 @@
 # svinorez-external
 
-> [!WARNING]
-> **ПРОЕКТ ЗАБРОШЕН / UNMAINTAINED**
-> Обновлять я это не буду, мне поебать. Оффсеты под новые патчи CS2 ищите и обновляйте сами в `config/offsets.json`. Код выложен как есть (AS-IS). PR и Issue чекать никто не собирается.
->
-> ⚠️ **Протестировано ТОЛЬКО на Arch Linux + Hyprland (XWayland).** На других дистрибутивах и окружениях (GNOME, KDE, Sway и т.д.) запускайте и допиливайте сами.
+> [!NOTE]
+> Основное окружение разработки и тестирования — **Arch Linux + Hyprland (XWayland)**. Для корректной работы прозрачного оверлея требуется X11/XWayland с композитором, поддерживающим 32-битный ARGB TrueColor visual.
 
-Внешний (external) ESP, Aimbot, Triggerbot и RCS для CS2 на Linux: демон `cs2espd` читает память запущенной
-игры через `/proc/<pid>/mem` и рисует боксы игроков в прозрачном X11-оверлее
-поверх XWayland. Управление — через CLI-утилиту `espctl` и горячую клавишу F8.
+Внешний (external) ESP, Aimbot, Triggerbot и RCS для Counter-Strike 2 на Linux.
+Демон `cs2espd` читает память процесса игры через прямой системный вызов `process_vm_readv` и рисует боксы, скелеты и информацию об игроках в прозрачном X11-оверлее поверх XWayland. Управление осуществляется через интерактивное GUI-меню (клавиша `Insert`), CLI-утилиту `espctl` и горячую клавишу `F8`.
 
-Код в процесс игры не инжектится, ядро не трогается, ptrace для записи не используется.
+Код в процесс игры не внедряется (no injection), ядро не модифицируется, ptrace для записи не используется.
 
 ## Архитектура
 
 ```
-cs2espd
-  ├─ game     — attach к процессу, обход entity list (чанки), view matrix
-  ├─ esp      — world-to-screen, вычисление экранных боксов
-  ├─ trigger  — чтение m_iIDEntIndex под прицелом и выстрел через XTest
-  ├─ overlay  — X11 ARGB окно: override_redirect, XShape input, текст через Xft
-  └─ ipc      — абстрактный Unix сокет @.cs_pipe_stream + XGrabKey(F8) + SIGUSR1
-
-espctl — CLI: on / off / toggle / trigger [on|off|toggle] / status / quit
-common — memory (pread64 + process_vm_readv fallback), config (json + валидация),
-         json-парсер без внешних зависимостей, IPC-протокол, throttled logger
+svinorez-external
+  ├─ cs2espd
+  │    ├─ game       — поиск процесса, чтение памяти (process_vm_readv), обход entity list (чанки), view matrix
+  │    ├─ esp        — world-to-screen, скелеты (24 кости / 18 связок), боксы, дистанция, здоровье
+  │    ├─ aimbot     — выбор кости (голова/грудь), FOV, smooth-доводка, visible check, humanize-джиттер
+  │    ├─ triggerbot — чтение crosshair ID (m_iIDEntIndex), team check, эмуляция клика через XTest
+  │    ├─ rcs        — recoil control system: компенсация отдачи по углам punch angle через XTest
+  │    ├─ overlay    — X11 ARGB окно (override_redirect), XShape input clipping, шрифт Xft, Hyprland socket IPC
+  │    ├─ menu       — интерактивное 5-вкладочное GUI-меню (Insert): ESP, Aimbot, Triggerbot, RCS, Binds
+  │    └─ ipc        — абстрактный Unix-сокет @.cs_pipe_stream, XGrabKey(F8), SIGUSR1
+  ├─ espctl          — CLI-управление: on / off / toggle / aim / trigger / rcs / status / quit
+  └─ common          — memory (process_vm_readv), keymap (PC105 сканкоды + Keysym), config (JSON), логгер
 ```
 
 ## Зависимости
 
 - CMake >= 3.16
-- Компилятор C++20 (g++ >= 11 или clang >= 15)
-- libX11, libXext (XShape), libXfixes, libXrender, libXft (тянет freetype/fontconfig), libXtst (XTest для bhop)
-- pthread
+- Компилятор C++20 (GCC >= 11 или Clang >= 15)
+- `libX11` — подключение к X-серверу / XWayland
+- `libXext` — расширение XShape (прозрачность кликов и захват мыши в меню)
+- `libXfixes` — интеграция с оконной системой X11
+- `libXrender` — альфа-композитинг и визуализаторы
+- `libXrandr` — определение геометрии мониторов и авто-привязка к монитору с игрой
+- `libXft` — рендеринг шрифтов через FreeType2 и Fontconfig
+- `libXtst` — расширение XTest для эмуляции ввода (доводка аимбота, выстрел триггербота, компенсация RCS)
+- `pthread`
 
 ### Debian / Ubuntu
 
@@ -42,30 +46,32 @@ sudo apt-get install -y build-essential cmake pkg-config \
     libxft-dev libfontconfig1-dev libfreetype6-dev libxtst-dev
 ```
 
-### Arch
+### Arch Linux
 
 ```bash
 sudo pacman -S --needed base-devel cmake pkgconf \
     libx11 libxext libxfixes libxrender libxrandr libxft fontconfig freetype2 libxtst
 ```
 
-## Быстрый старт (в 1 команду)
+## Быстрый старт
 
 ```bash
 # 1. Автоматическая проверка зависимостей и сборка
 ./build.sh
 
-# 2. Запуск чита
+# 2. Запуск демона
 ./start.sh
 ```
 
 В игре:
-- **`[INSERT]`** — Открыть / закрыть интерактивное меню (вкладки: ESP, AIMBOT, TRIGGERBOT, RCS, BINDS).
-- **`[F8]`** — Быстрое включение / выключение ESP.
-- Стрелки вверх/вниз — навигация по пунктам меню.
-- Стрелки влево/вправо или Enter — изменение значений.
+- **`[INSERT]`** — открыть / закрыть интерактивное меню (вкладки: ESP, AIMBOT, TRIGGERBOT, RCS, BINDS & MISC).
+- **`[F8]`** — быстрое включение / выключение ESP.
+- `Стрелки вверх/вниз` — навигация по строкам меню.
+- `Стрелки влево/вправо` — переключение вкладок или изменение значений слайдеров.
+- `Enter` / `Пробел` — переключение тумблеров или сохранение настроек на диск.
+- `Мышь` — интерактивные клики по вкладкам, кнопкам и чекбоксам при открытом меню.
 
-## Ручная сборка (если не хочется скриптом)
+## Ручная сборка
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -74,178 +80,266 @@ cmake --build build -j$(nproc)
 
 Бинарники: `build/cs2espd`, `build/espctl`.
 
-## Запуск
+## Запуск и управление
 
 ```bash
-./build/cs2espd                    # демон: оверлей + F8 + меню INS + IPC-сокет
-./build/espctl status              # OK ESP:ON AIM:ON TRIGGER:ON | ERR <текст>
-./build/espctl on|off|toggle       # управление ESP
-./build/espctl aim [on|off|toggle] # управление Aimbot
-./build/espctl trigger [on|off|toggle] # управление Triggerbot
-./build/espctl quit                # выход
-kill -USR1 $(pidof cs2espd)        # toggle ESP по сигналу
+# Запуск демона оверлея в foreground
+./build/cs2espd
+
+# Запрос текущего статуса
+./build/espctl status
+# Вывод: OK ESP:ON AIM:OFF TRIGGER:OFF RCS:OFF MENU:CLOSED
+
+# Управление модулем ESP
+./build/espctl on
+./build/espctl off
+./build/espctl toggle
+
+# Управление модулем Aimbot (по умолчанию toggle)
+./build/espctl aim
+./build/espctl aim on
+./build/espctl aim off
+
+# Управление модулем Triggerbot (по умолчанию toggle)
+./build/espctl trigger
+./build/espctl trigger on
+./build/espctl trigger off
+
+# Управление модулем RCS (по умолчанию toggle)
+./build/espctl rcs
+./build/espctl rcs on
+./build/espctl rcs off
+
+# Завершение работы демона
+./build/espctl quit
+
+# Переключение ESP через POSIX-сигнал
+kill -USR1 $(pidof cs2espd)
 ```
+
+`cs2espd` работает в foreground, логирование ведётся в `stdout`/`stderr`. Останов выполняется через `./build/espctl quit`, `SIGINT`/`SIGTERM` или комбинацию `Ctrl+C`.
+
+Порядок запуска относительно игры не имеет значения: если CS2 ещё не запущена, демон периодически логирует `waiting for cs2` и ожидает появления процесса. При запуске игры демон автоматически аттачится и находит базу модуля `libclient.so`.
 
 ## Интерактивное меню (клавиша INSERT / INS)
 
-В оверлей встроено GUI-меню с поддержкой клавиатуры и мыши:
-- **Вкладка [1] ESP**: общий тумблер ESP, скелеты игроков (bone joints), боксы, имена игроков, дистанция, полоски здоровья, team check (только враги), максимальная дистанция отрисовки.
-- **Вкладка [2] AIMBOT**: тумблер Aimbot, выбор кости (HEAD кость 7 / CHEST кость 5), клавиша удержания (`always`, `alt`, `shift`, `ctrl`, `caps`, `c`, `v`, `x`, `mouse1`, `mouse2`), радиус FOV (в пикселях), фактор сглаживания (smooth), team check.
-- **Вкладка [3] TRIGGERBOT**: тумблер Triggerbot, team check, выбор клавиши удержания (`always`, `alt`, `shift`, `ctrl`, `caps`, `x`), задержка перед выстрелом (pre-delay), длительность клика (post-delay), кулдаун между выстрелами.
-- **Вкладка [4] BINDS & MISC**: отображение биндов (Menu: INSERT, ESP: F8, Aimbot, Trigger), ограничение FPS оверлея, кнопка сохранения настроек в `config.json`.
+В оверлей встроено GUI-меню с поддержкой мыши и клавиатуры, разделенное на 5 вкладок:
+
+- **Вкладка [1] ESP**:
+  - `ESP Master Switch`: глобальный тумблер ESP (ON/OFF).
+  - `Player Skeletons`: отрисовка костей скелета (24 сустава / 18 связок).
+  - `Bounding Boxes`: прямоугольные 2D-боксы игроков.
+  - `Player Names`: отображение никнеймов игроков.
+  - `Distance Display`: расстояние до цели в игровых юнитах.
+  - `Health Bars`: вертикальная полоса здоровья игрока.
+  - `Team Check (Enemies Only)`: фильтр своих игроков (отображать только врагов).
+  - `Max Render Distance`: лимит дистанции отрисовки (Unlimited / 1000..8000 юнитов).
+
+- **Вкладка [2] AIMBOT**:
+  - `Aimbot Master Switch`: включение/выключение аимбота.
+  - `Target Bone`: выбор целевой кости (`head` кость 7, `chest` кость 5).
+  - `Activation Hotkey`: клавиша удержания (`always`, `alt`, `shift`, `ctrl`, `caps`, `c`, `v`, `x`, `z`, `mouse1`, `mouse2`).
+  - `FOV Radius`: радиус захвата цели в пикселях от прицела (20..250 px).
+  - `Smooth Factor`: плавность доводки курсора (2..30).
+  - `Visible Check (No Walls)`: проверка видимости цели через `m_entitySpottedState`.
+  - `Team Check (No Teammates)`: игнорирование союзников.
+
+- **Вкладка [3] TRIGGERBOT**:
+  - `Triggerbot Master`: включение/выключение триггербота.
+  - `Team Check (No Teammates)`: стрельба исключительно по врагам.
+  - `Activation Hotkey`: клавиша удержания (`always`, `alt`, `shift`, `ctrl`, `caps`, `x`, `c`, `v`, `z`, `mouse1`, `mouse2`).
+  - `Reaction Pre-delay`: задержка перед первым выстрелом (0..300 мс).
+  - `Mouse Click Duration`: длительность зажатия ЛКМ (20..80 мс).
+  - `Cooldown Between Shots`: интервал между сериями выстрелов (100..450 мс).
+
+- **Вкладка [4] RECOIL CONTROL (RCS)**:
+  - `RCS Master Switch`: включение/выключение компенсации отдачи.
+  - `Pitch Control (Vertical Y)`: процент вертикальной компенсации (0%..150%).
+  - `Yaw Control (Horizontal X)`: процент горизонтальной компенсации (0%..150%).
+  - `In-Game Sensitivity`: чувствительность мыши из настроек CS2 (0.5..4.0) для точного расчета углов отдачи (`sens * 0.022`).
+
+- **Вкладка [5] BINDS & MISC**:
+  - `Menu Toggle Key`: отображение клавиши открытия меню (`[ INSERT ]`).
+  - `ESP Toggle Hotkey`: горячая клавиша переключения ESP (`F7`..`F12`).
+  - `Aimbot Hotkey`: горячая клавиша Aimbot.
+  - `Triggerbot Hotkey`: горячая клавиша Triggerbot.
+  - `Overlay Target FPS`: ограничение частоты кадров оверлея (60..360 FPS).
+  - `Save Settings To Disk`: сохранение всех изменённых параметров в `config/config.json`.
 
 ### Навигация в меню:
-- **`Insert` / `Escape`** — открыть / закрыть меню;
-- **`1`, `2`, `3`, `4` или `Tab`** (или стрелки `Влево / Вправо` на строке `Tab Category`) — переключение вкладок;
-- **`Стрелки Вверх / Вниз`** — перемещение по пунктам;
-- **`Стрелки Влево / Вправо`** — циклическое изменение значений и слайдеров;
-- **`Enter` или `Пробел`** — переключение чекбоксов / сохранение настроек;
-- **Мышь** — интерактивные клики по вкладкам, пунктам и кнопкам (пока меню открыто, клики внутри меню перехватываются, клики вне меню проходят в игру).
+- **`Insert` / `Escape`** — открыть / закрыть меню.
+- **`1`, `2`, `3`, `4`, `5` или `Tab`** — быстрое переключение между вкладками.
+- **`Стрелки Вверх / Вниз`** — навигация по строкам параметров.
+- **`Стрелки Влево / Вправо`** — циклическое переключение значений и слайдеров.
+- **`Enter` или `Пробел`** — переключение чекбоксов / сохранение настроек.
+- **Мышь** — интерактивные клики по вкладкам, параметрам и кнопкам (пока меню открыто, клики внутри меню обрабатываются интерфейсом, клики вне меню проходят в игру).
 
-`cs2espd` работает в foreground, лог — в stdout/stderr. Останов: `espctl quit`,
-SIGINT/SIGTERM или Ctrl+C. Порядок запуска относительно игры не важен: пока CS2
-не запущена, демон печатает `waiting for cs2` (один раз в 5 секунд) и продолжает
-работать; как только процесс появится — аттачится сам.
+## Ограничения XWayland и Hyprland
 
-Сокет занят другим демоном — запуск завершится с понятной ошибкой, мёртвый
-stale-файл от прошлого запуска корректно поднимается заново.
+- Оверлей рассчитан на **XWayland** (или стандартную X11-сессию): окно создаётся через Xlib с 32-битным ARGB visual. Без работающего композитора прозрачность недоступна (в XWayland композитинг есть по умолчанию, под чистым X11 требуется `picom` или аналог).
+- **Нативный Wayland layer-shell не используется**: если запустить демон в сессии без XWayland, запуск прервётся с ошибкой `cannot open display`.
+- При запуске в Hyprland демон автоматически применяет правила к окну оверлея через сокет IPC (`hl.window_rule` / `windowrulev2`), отключая размытие фона (`no_blur = true`) и увод фокуса (`no_focus = true`, `no_initial_focus = true`).
+- Для точного совпадения экранных боксов с моделями игроков CS2 необходимо запускать в режиме **полноэкранного окна без рамок (borderless windowed)** или в обычном оконном режиме.
+- Системный вызов `process_vm_readv`: в системах с активным модулем безопасности Yama LSM ядро может блокировать чтение памяти неродственных процессов. Для разрешения выполните:
+  ```bash
+  echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope
+  ```
+  Либо назначьте бинарнику права:
+  ```bash
+  sudo setcap cap_sys_ptrace=eip build/cs2espd
+  ```
 
-## Ограничения XWayland
-
-- Оверлей рассчитан на **XWayland** (или обычный X-сервер): окно создаётся через
-  Xlib с 32-битным ARGB visual. Без композитора прозрачность работать не будет —
-  на XWayland композитор есть всегда, под голым X11 нужен picom или аналог.
-- **Нативный Wayland-оверлей не поддерживается** (layer-shell не реализован):
-  если сессия без XWayland, демон остановится с ошибкой «cannot open display».
-- Для совпадения боксов с кадром игры запускай CS2 в **borderless / windowed**
-  режиме: проекция считается на весь X-экран оверлея.
-- Горячая клавиша: игра (или другой клиент) может переграбить F8 через XGrabKey —
-  тогда демон залогирует предупреждение и продолжит работать, ESP останется
-  управляемым через `espctl`.
-
-## Конфиги
+## Конфигурация
 
 ### `config/config.json`
 
-| Поле         | Значение            | Что значит |
-|--------------|---------------------|------------|
-| `process_name` | `cs2`             | имя процесса игры (по `comm` / `cmdline`) |
-| `game_module`  | `libclient.so`    | клиентский модуль, база ищется в `/proc/<pid>/maps` |
-| `socket_path`  | `@.cs_pipe_stream` | абстрактный управляющий сокет (в памяти ядра, без файлов в `/tmp`) |
-| `stealth.*`    | —                 | маскировка имени процесса (`comm`/`cmdline`) и рандомизация класса окна |
-| `hotkey`       | `F8`              | клавиша toggle ESP (KeySym, XGrabKey) |
-| `fps_limit`    | `144`             | частота цикла чтения и оверлея |
-| `team_check`   | `true`            | `false` — рисовать и союзников (цветом `colors.teammate`) |
-| `max_distance` | `0`               | лимит дистанции в игровых юнитах; 0 — без лимита |
-| `colors.*`     | `#RRGGBBAA`       | цвет enemy / teammate / local |
-| `esp.*`        | —                 | размеры боксов, hp-полоски, включение имён/дистанции/статуса, шрифт Xft |
-| `esp.show_skeleton` | `true`        | рисовать скелеты игроков (18 костных связок) |
-| `esp.monitor`  | `-1`              | `-1` — авто: оверлей ложится на монитор, где окно игры (детект по `_NET_WM_PID` → active window → курсор); `0`/`1` — индекс XRR-монитора |
-| `aimbot.enabled` | `false`         | включение модуля aimbot |
-| `aimbot.hotkey`  | `"always"`      | клавиша удержания (`always`, `alt`, `shift`, `ctrl`, `mouse1`, `mouse2`, `x`, `c`, `v`) |
-| `aimbot.bone`    | `"head"`        | целевая кость (`"head"` кость 7, `"chest"` кость 5) |
-| `aimbot.fov`     | `120.0`         | радиус захвата FOV в пикселях |
-| `aimbot.smooth`  | `4.0`           | сглаживание доводки (1.0 = instant snap, 4.0 = smooth assist) |
-| `aimbot.team_check` | `true`       | целиться только во врагов |
-| `triggerbot.enabled` | `false`      | включение модуля triggerbot |
-| `triggerbot.hotkey`  | `"always"`       | клавиша удержания (`always`, `ALT`, `SHIFT`, `CTRL`, `X`) |
-| `triggerbot.pre_delay_ms` | `10`        | задержка перед выстрелом (мс) |
-| `triggerbot.post_delay_ms` | `20`       | длительность клика (мс) |
-| `triggerbot.cooldown_ms` | `120`        | задержка между выстрелами (мс) |
+| Поле | Значение по умолчанию | Описание |
+|------|------------------------|----------|
+| `process_name` | `"cs2"` | Имя процесса игры (поиск в `/proc/<pid>/comm` и `/proc/<pid>/cmdline`) |
+| `game_module` | `"libclient.so"` | Имя клиентской библиотеки игры в `/proc/<pid>/maps` |
+| `socket_path` | `"@.cs_pipe_stream"` | Путь к абстрактному управляющему Unix-сокету |
+| `hotkey` | `"F8"` | Клавиша быстрого переключения ESP (KeySym через XGrabKey) |
+| `fps_limit` | `144` | Частота цикла обновления оверлея и чтения памяти |
+| `team_check` | `true` | Фильтр союзников (`false` — рисовать союзников цветом `colors.teammate`) |
+| `max_distance` | `0` | Максимальная дистанция отрисовки в юнитах (0 — без ограничений) |
+| `stealth.spoof_process_name` | `"pipewire-sys"` | Подмена имени процесса в `/proc/<pid>/comm` и `/proc/<pid>/cmdline` |
+| `stealth.randomize_window_class` | `false` | Случайная генерация WM_CLASS окна оверлея |
+| `colors.local` | `"#00FF00FF"` | Цвет локального игрока (`#RRGGBBAA`) |
+| `colors.enemy` | `"#FF4040FF"` | Цвет противников (`#RRGGBBAA`) |
+| `colors.teammate` | `"#40A0FFFF"` | Цвет союзников (`#RRGGBBAA`) |
+| `esp.box_height_units` | `70` | Высота бокса игрока в игровых юнитах |
+| `esp.box_width_ratio` | `0.45` | Отношение ширины бокса к его высоте |
+| `esp.health_bar_width` | `6` | Ширина вертикального бара здоровья в пикселях |
+| `esp.show_names` | `true` | Отображение никнеймов игроков |
+| `esp.show_distance` | `true` | Отображение дистанции до игрока |
+| `esp.show_status_text` | `true` | Отображение служебных статусов в углу экрана |
+| `esp.show_skeleton` | `true` | Отрисовка скелета (18 связок костей) |
+| `esp.font` | `"DejaVu Sans:size=10"` | Шрифт Xft для текста оверлея |
+| `esp.monitor` | `-1` | Индекс монитора: `-1` — автодетект по окну игры, `0`/`1` — явный индекс |
+| `aimbot.enabled` | `false` | Включение модуля Aimbot |
+| `aimbot.hotkey` | `"c"` | Клавиша удержания для доводки прицела |
+| `aimbot.bone` | `"chest"` | Целевая кость: `"head"` (кость 7) или `"chest"` (кость 5) |
+| `aimbot.fov` | `35` | Радиус захвата целей в пикселях от прицела |
+| `aimbot.smooth` | `20` | Коэффициент сглаживания доводки |
+| `aimbot.team_check` | `true` | Целиться только во вражеских игроков |
+| `aimbot.visible_check` | `true` | Проверка видимости (игнорировать цели за препятствиями) |
+| `aimbot.humanize` | `true` | Микро-джиттер для имитации естественного движения мыши |
+| `triggerbot.enabled` | `false` | Включение модуля Triggerbot |
+| `triggerbot.hotkey` | `"alt"` | Клавиша активации автоматического выстрела |
+| `triggerbot.pre_delay_ms` | `190` | Задержка перед кликом (мс) |
+| `triggerbot.post_delay_ms` | `55` | Длительность зажатия ЛКМ (мс) |
+| `triggerbot.cooldown_ms` | `350` | Задержка между повторными выстрелами (мс) |
+| `triggerbot.humanize` | `true` | Рандомизация задержек реакции по нормальному распределению |
+| `rcs.enabled` | `false` | Включение модуля компенсации отдачи (RCS) |
+| `rcs.scale_x` | `0.8` | Множитель компенсации горизонтальной отдачи (yaw) |
+| `rcs.scale_y` | `0.8` | Множитель компенсации вертикальной отдачи (pitch) |
+| `rcs.sensitivity` | `1.5` | Чувствительность мыши из игровых настроек CS2 |
 
 ### Мульти-монитор
 
-На двух мониторах 1920x1080 XWayland отдаёт root 3840x1080, но оверлей заранее
-сужен до одной головы: демон находит окно игры (`_NET_WM_PID`) и рисует
-только на её мониторе, перебазируя W2S под геометрию этой головы. Переезд игры
-на другой монитор отлавливается каждые ~20 кадров — окно пересоздаётся
-на новом head. Если `_NET_WM_PID` у окна игры нет, работают fallback'и
-(active window → позиция курсора → индекс 0), либо задай `esp.monitor` явно.
+В многомониторных конфигурациях XWayland создает единый root-экран (например, 3840x1080 для двух FullHD мониторов). Демон определяет монитор с окном игры по `_NET_WM_PID` (с фолбэками на активное окно, позицию курсора и монитор 0) и ограничивает оверлей размерами нужного дисплея, пересчитывая проекцию World-to-Screen.
+
+При перемещении окна CS2 на соседний монитор демон пересоздает окно оверлея на целевом дисплее. Также монитор можно зафиксировать параметром `esp.monitor`.
 
 ### `config/offsets.json`
 
-Уже заполнены из свежего дампа **linux-ветки** `a2x/cs2-dumper` (нативный
-Linux-клиент, RVAs для `libclient.so`; схема — из `output/libclient_so.json`
-той же ветки, поэтому поля C++-классов совпадают с твоим билдом):
+Файл содержит RVA-смещения клиентского модуля `libclient.so` и смещения внутри структур движка Source 2:
 
 ```json
-rvas.dwEntityList      = 74199040   # libclient.so
-rvas.dwViewMatrix      = 76839680
-rvas.dwLocalPlayerPawn = 76809432
-pawn.m_pGameSceneNode  = 1184
-pawn.m_iHealth         = 1212
-pawn.m_lifeState       = 1220
-pawn.m_iTeamNum        = 1367
-pawn.m_hController     = 5188
-game_scene_node.m_vecOrigin = 128
-controller.m_iszPlayerName  = 2172
+{
+  "rvas": {
+    "dwLocalPlayerController": 76586936,
+    "dwEntityList": 74206208,
+    "dwViewMatrix": 76846848
+  },
+  "entity_list": {
+    "pointer_size": 8,
+    "chunk_stride": 0,
+    "entity_stride": 112,
+    "chunk_shift": 9,
+    "index_mask": 32767
+  },
+  "pawn": {
+    "m_pGameSceneNode": 1184,
+    "m_iHealth": 1212,
+    "m_lifeState": 1220,
+    "m_iTeamNum": 1367,
+    "m_hController": 5188,
+    "m_iIDEntIndex": 17796,
+    "m_entitySpottedState": 11544,
+    "m_pAimPunchServices": 5408,
+    "m_iShotsFired": 11592
+  },
+  "aim_punch": {
+    "m_predictableBaseAngle": 80
+  },
+  "game_scene_node": {
+    "m_vecAbsOrigin": 200,
+    "m_modelState": 320,
+    "modelState_origin": 0,
+    "m_pBoneArray": 448
+  },
+  "controller": {
+    "m_hPawn": 2108,
+    "m_iszPlayerName": 2172
+  }
+}
 ```
 
-Поле `controller.m_iszPlayerName` опционально: если Valve поменяет его
-семантику, демон просто перестаёт рисовать имена (боксы работают и без него).
-`entity_list.*` — стандартная схема чанков (8/16/120/9/0x7FFF), трогать не надо.
+Все поля проверяются при загрузке: если смещение отсутствует или равно нулю, демон выводит предупреждение с указанием имени отсутствующего поля.
 
-Валидация: не-числа в offsets, кривые цвета (`#RRGGBBAA`), не-числовой
-`fps_limit` и прочее — ошибка с именем файла и поля. Примеры:
+### Как обновлять offsets
 
-```
-config.json: field 'process_name' must be a number
-config.json: JSON parse error: line 1, column 1: invalid literal
-offsets.json: field 'dwEntityList' must be a non-negative number or null
-```
+После каждого патча игры RVA-смещения меняются. Их можно извлечь из свежего дампа **linux-ветки** `a2x/cs2-dumper`:
 
-## Как обновлять offsets
-
-После патча игры оффсеты меняются; RVAs — только с Linux-дампа.
-
-1. Возьми свежий дамп **linux-ветки** `a2x/cs2-dumper`:
+1. Скачайте актуальные дампы для нативного Linux-клиента:
    ```bash
-   curl -sL https://raw.githubusercontent.com/a2x/cs2-dumper/linux/output/offsets.json
-   curl -sL -o /tmp/libclient_so.json https://raw.githubusercontent.com/a2x/cs2-dumper/linux/output/libclient_so.json
+   curl -sL https://raw.githubusercontent.com/a2x/cs2-dumper/linux/output/offsets.json -o /tmp/offsets.json
+   curl -sL https://raw.githubusercontent.com/a2x/cs2-dumper/linux/output/libclient_so.json -o /tmp/libclient_so.json
    ```
-2. Обнови в `config/offsets.json`:
-   - `rvas.*` — прямо из `offsets.json` (секция `libclient.so`).
-   - `pawn.*`, `game_scene_node.*`, `controller.*` — из `libclient_so.json`:
-     `C_BaseEntity` (`m_pGameSceneNode`, `m_iHealth`, `m_lifeState`, `m_iTeamNum`),
-     `CBasePlayerPawn::m_hController`, `CGameSceneNode::m_vecOrigin`,
-     `CBasePlayerController::m_iszPlayerName`.
-   - `entity_list.*` не трогай, пока Valve не поменяет разметку чанков.
-3. Перезапусти `cs2espd`. Пустые поля видны сразу: каждый нулевой offset логируется
-   как ERROR с именем файла и пути поля.
-
-```
-[INFO ] config loaded: config/config.json + config/offsets.json
-[INFO ] attached to cs2 (pid 12345)
-[INFO ] module base: 0x7f12ab000000
-```
+2. Обновите `config/offsets.json`:
+   - `rvas.*` — берутся из секции `libclient.so` файла `offsets.json`.
+   - Поля `pawn.*`, `game_scene_node.*`, `controller.*` — из `libclient_so.json`:
+     - `C_BaseEntity` (`m_pGameSceneNode`, `m_iHealth`, `m_lifeState`, `m_iTeamNum`)
+     - `C_CSPlayerPawn` (`m_iIDEntIndex`, `m_entitySpottedState`, `m_pAimPunchServices`, `m_iShotsFired`)
+     - `CBasePlayerController` (`m_hPawn`, `m_iszPlayerName`)
+     - `CGameSceneNode` (`m_vecAbsOrigin`, `m_pBoneArray`).
+3. Перезапустите демон `cs2espd`.
 
 ## Структура проекта
 
 ```
-cs2-esp-linux/
+svinorez-external/
 ├── CMakeLists.txt
 ├── README.md
+├── build.sh
+├── start.sh
 ├── config/
 │   ├── config.json
 │   └── offsets.json
-├── include/common/
-│   ├── config.hpp
-│   ├── ipc.hpp
-│   ├── json.hpp
-│   ├── log.hpp
-│   └── memory.hpp
+├── include/
+│   └── common/
+│       ├── config.hpp
+│       ├── ipc.hpp
+│       ├── json.hpp
+│       ├── keymap.hpp
+│       ├── log.hpp
+│       └── memory.hpp
 └── src/
     ├── common/
     │   ├── config.cpp
     │   ├── ipc.cpp
     │   ├── json.cpp
+    │   ├── keymap.cpp
     │   ├── log.cpp
     │   └── memory.cpp
     ├── cs2espd/
     │   ├── main.cpp
     │   ├── game.hpp / game.cpp
     │   ├── esp.hpp / esp.cpp
+    │   ├── aimbot.hpp / aimbot.cpp
     │   ├── triggerbot.hpp / triggerbot.cpp
+    │   ├── rcs.hpp / rcs.cpp
     │   ├── menu.hpp / menu.cpp
     │   └── overlay.hpp / overlay.cpp
     └── espctl/
@@ -254,19 +348,12 @@ cs2-esp-linux/
 
 ## Траблшутинг
 
-| Симптом | Причина |
-|---------|---------|
-| `X11: cannot open display` | в сессии нет XWayland / X-сервера |
-| `32-битный ARGB TrueColor visual не найден` | нет композитора (голый X11 без picom) |
-| `abstract socket ... is busy` | уже работает другой экземпляр демона |
-| `top-level must be an object` и т.п. | битый JSON в конфиге |
-| `offsets.json: rvas.* == 0 ...` | offsets не заполнены — см. раздел выше |
-| `waiting for cs2` | игра не запущена; это штатное сообщение |
-
----
-
-**Developers:**
-- Gemini 3.8
-- Claude Opus 4.7
-- GLM 5.3
-
+| Симптом | Причина и решение |
+|---------|-------------------|
+| `X11: cannot open display` | В текущей сессии отсутствует XWayland / X-сервер. Проверьте переменную окружения `DISPLAY`. |
+| `32-битный ARGB TrueColor visual не найден` | Отсутствует активный композитор (чистый X11 без `picom`). В XWayland композитинг работает всегда. |
+| `process_vm_readv denied (EPERM)` | Модуль ядра Yama LSM запрещает ptrace: выполните `echo 0 \| sudo tee /proc/sys/kernel/yama/ptrace_scope` или `sudo setcap cap_sys_ptrace=eip build/cs2espd`. |
+| `abstract socket ... is busy` | Уже запущен другой экземпляр демона `cs2espd`. Остановите его через `killall cs2espd` или `pkill -9 cs2espd`. |
+| `JSON parse error` / `field must be...` | Ошибка валидации структуры `config/config.json` или `config/offsets.json`. Проверьте синтаксис JSON и типы полей. |
+| `offsets.json: rvas.* == 0` | Оффсеты не заполнены или сброшены в 0. Обновите их по инструкции выше. |
+| `waiting for cs2` | Процесс игры ещё не запущен. Демон продолжает ожидать появления процесса в системе. |
