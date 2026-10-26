@@ -70,6 +70,7 @@ add_executable(cs2espd
     src/cs2espd/overlay.cpp
     src/cs2espd/triggerbot.cpp
     src/cs2espd/aimbot.cpp
+    src/cs2espd/style.cpp
     src/cs2espd/menu.cpp
 )
 target_include_directories(cs2espd PRIVATE ${XFT_INCLUDE_DIRS})

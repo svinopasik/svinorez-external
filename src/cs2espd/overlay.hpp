@@ -42,6 +42,7 @@ public:
     void toggle_menu() { menu_toggle_req_.store(true); }
     void open_menu()   { menu_open_req_.store(true); }
     void close_menu()  { menu_close_req_.store(true); }
+    void set_menu_category(int c) { menu_.set_category(c); }
 
     const std::string& window_class() const { return window_class_; }
 

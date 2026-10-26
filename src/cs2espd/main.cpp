@@ -292,6 +292,10 @@ void ipc_loop(int srv_fd, cs2esp::Overlay& overlay) {
             } else if (line == "menu close") {
                 overlay.close_menu();
                 reply = "OK MENU CLOSED";
+            } else if (line.rfind("tab ", 0) == 0) {
+                int t = std::atoi(line.substr(4).c_str());
+                overlay.set_menu_category(t);
+                reply = "OK TAB " + std::to_string(t);
             } else if (line == "status") {
                 reply = std::string("OK ESP:") + (g_esp_on.load() ? "ON" : "OFF") +
                         " AIM:" + (g_aimbot_on.load() ? "ON" : "OFF") +

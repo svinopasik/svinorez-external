@@ -11,13 +11,14 @@ namespace {
 
 void print_usage(const char* argv0) {
     std::fprintf(stderr,
-                 "usage: %s <on|off|toggle|aim [on|off|toggle]|trigger [on|off|toggle]|status|quit> [--config config/config.json]"
+                 "usage: %s <on|off|toggle|aim [on|off|toggle]|trigger [on|off|toggle]|menu [open|close|toggle]|status|quit> [--config config/config.json]"
                  " [--socket @.cs_pipe_stream]\n"
                  "  on              enable ESP\n"
                  "  off             disable ESP\n"
                  "  toggle          switch ESP state\n"
                  "  aim [state]     control aimbot (on/off/toggle, default toggle)\n"
                  "  trigger [state] control triggerbot (on/off/toggle, default toggle)\n"
+                 "  menu [action]   control menu (open/close/toggle, default toggle)\n"
                  "  status          current state\n"
                  "  quit            stop daemon\n",
                  argv0);
@@ -119,6 +120,22 @@ int main(int argc, char** argv) {
         } else {
             cmd = "trigger toggle";
         }
+    } else if (cmd == "menu") {
+        if (!subcmd.empty()) {
+            if (subcmd != "open" && subcmd != "close" && subcmd != "toggle") {
+                print_usage(argv[0]);
+                return 2;
+            }
+            cmd = "menu " + subcmd;
+        } else {
+            cmd = "menu toggle";
+        }
+    } else if (cmd == "tab") {
+        if (!subcmd.empty()) {
+            cmd = "tab " + subcmd;
+        } else {
+            cmd = "tab 0";
+        }
     } else if (!subcmd.empty()) {
         print_usage(argv[0]);
         return 2;
@@ -128,7 +145,9 @@ int main(int argc, char** argv) {
         (cmd != "on" && cmd != "off" && cmd != "toggle" &&
          cmd != "status" && cmd != "quit" &&
          cmd != "aim on" && cmd != "aim off" && cmd != "aim toggle" &&
-         cmd != "trigger on" && cmd != "trigger off" && cmd != "trigger toggle")) {
+         cmd != "trigger on" && cmd != "trigger off" && cmd != "trigger toggle" &&
+         cmd != "menu" && cmd != "menu open" && cmd != "menu close" && cmd != "menu toggle" &&
+         cmd.rfind("tab", 0) != 0)) {
         print_usage(argv[0]);
         return 2;
     }

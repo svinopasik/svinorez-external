@@ -541,7 +541,8 @@ void Overlay::grab_menu_navigation() {
     if (menu_nav_grabbed_) return;
     const KeySym nav_syms[] = {
         XK_Up, XK_Down, XK_Left, XK_Right,
-        XK_Return, XK_KP_Enter, XK_Escape
+        XK_Return, XK_KP_Enter, XK_Escape,
+        XK_Tab, XK_1, XK_2, XK_3, XK_4, XK_5
     };
     const unsigned int mod_masks[] = {0, LockMask, Mod2Mask, LockMask | Mod2Mask};
 
@@ -563,7 +564,8 @@ void Overlay::ungrab_menu_navigation() {
     if (!menu_nav_grabbed_) return;
     const KeySym nav_syms[] = {
         XK_Up, XK_Down, XK_Left, XK_Right,
-        XK_Return, XK_KP_Enter, XK_Escape
+        XK_Return, XK_KP_Enter, XK_Escape,
+        XK_Tab, XK_1, XK_2, XK_3, XK_4, XK_5
     };
     const unsigned int mod_masks[] = {0, LockMask, Mod2Mask, LockMask | Mod2Mask};
 
@@ -590,7 +592,7 @@ void Overlay::update_input_shape() {
             XShapeCombineRectangles(dpy_, win_, ShapeInput, 0, 0, &r, 1, ShapeSet, YXBanded);
         }
         XSelectInput(dpy_, win_, ExposureMask | StructureNotifyMask | KeyPressMask |
-                                     ButtonPressMask | PointerMotionMask);
+                                     ButtonPressMask | ButtonReleaseMask | PointerMotionMask);
         grab_menu_navigation();
         XRaiseWindow(dpy_, win_);
     } else {
@@ -792,6 +794,10 @@ bool Overlay::frame(const std::vector<ScreenBox>& boxes, bool esp_on, bool aimbo
             }
         } else if (ev.type == ButtonPress && menu_.is_open()) {
             menu_.handle_click(ev.xbutton.button, ev.xbutton.x, ev.xbutton.y);
+        } else if (ev.type == ButtonRelease && menu_.is_open()) {
+            menu_.handle_mouse_up(ev.xbutton.button, ev.xbutton.x, ev.xbutton.y);
+        } else if (ev.type == MotionNotify && menu_.is_open()) {
+            menu_.handle_mouse_move(ev.xmotion.x, ev.xmotion.y);
         }
     }
 
