@@ -29,7 +29,8 @@ using namespace std::chrono_literals;
 
 namespace {
 
-// Anchors kBuildSalt in .rodata to differentiate binary SHA256 against static hash comparison.
+// Retains kBuildSalt in .rodata to produce a unique binary SHA256 per compilation.
+// Protects solely against naive static hash matching; not a VAC or anti-cheat bypass.
 [[maybe_unused]] volatile const char* g_salt_anchor = cs2esp::kBuildSalt;
 
 std::string resolve_socket_path(const std::string& path, const std::string& cfg_path) {

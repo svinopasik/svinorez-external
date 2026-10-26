@@ -15,8 +15,9 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# Build salt embedded into .rodata to produce distinct binary SHA256 hashes
-# between builds. This prevents naive static file hash matching (not an anti-cheat bypass).
+# Generates a unique random string embedded into .rodata so each compilation produces
+# a distinct binary SHA256 hash. Protects solely against naive static hash comparison;
+# this is NOT a VAC or anti-cheat bypass mechanism.
 string(RANDOM LENGTH 64 ALPHABET "0123456789abcdef" BUILD_SALT)
 string(TIMESTAMP BUILD_TIME "%Y%m%d%H%M%S")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/build_salt.hpp"
