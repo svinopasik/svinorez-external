@@ -12,9 +12,14 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <fcntl.h>
+#include <spawn.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/wait.h>
 #include <unistd.h>
+
+extern "C" char** environ;
 
 namespace cs2esp {
 namespace {
@@ -51,7 +56,7 @@ struct ScopedFd {
     operator int() const { return fd; }
 };
 
-bool send_hyprland_command(const std::string& cmd, std::string& reply) {
+bool send_hyprland_socket_command(const std::string& cmd, std::string& reply) {
     const char* sig = std::getenv("HYPRLAND_INSTANCE_SIGNATURE");
     if (!sig || *sig == '\0') return false;
 
@@ -65,13 +70,17 @@ bool send_hyprland_command(const std::string& cmd, std::string& reply) {
     }
 
     ScopedFd sock{::socket(AF_UNIX, SOCK_STREAM, 0)};
-    if (sock < 0) return false;
+    if (sock < 0) {
+        log_warn("hyprland ipc: socket creation failed: " + std::string(::strerror(errno)));
+        return false;
+    }
 
     struct sockaddr_un addr{};
     addr.sun_family = AF_UNIX;
     std::strncpy(addr.sun_path, sock_path.c_str(), sizeof(addr.sun_path) - 1);
 
     if (::connect(sock, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) != 0) {
+        log_warn("hyprland ipc: connect to " + sock_path + " failed: " + std::string(::strerror(errno)));
         return false;
     }
 
@@ -80,6 +89,7 @@ bool send_hyprland_command(const std::string& cmd, std::string& reply) {
 
     const ssize_t sent = ::send(sock, msg.data(), msg.size(), 0);
     if (sent < 0 || static_cast<std::size_t>(sent) != msg.size()) {
+        log_warn("hyprland ipc: send failed: " + std::string(::strerror(errno)));
         return false;
     }
 
@@ -90,31 +100,87 @@ bool send_hyprland_command(const std::string& cmd, std::string& reply) {
         reply = buf;
         return true;
     }
+    log_warn("hyprland ipc: recv failed: " + std::string(::strerror(errno)));
     return false;
+}
+
+bool run_hyprctl_spawn(const std::vector<std::string>& args, std::string& err_out) {
+    std::vector<char*> argv;
+    argv.push_back(const_cast<char*>("hyprctl"));
+    for (const auto& a : args) {
+        argv.push_back(const_cast<char*>(a.c_str()));
+    }
+    argv.push_back(nullptr);
+
+    int pipe_fd[2];
+    if (::pipe2(pipe_fd, O_CLOEXEC) != 0) {
+        err_out = "pipe2 failed: " + std::string(::strerror(errno));
+        return false;
+    }
+
+    posix_spawn_file_actions_t actions;
+    posix_spawn_file_actions_init(&actions);
+    posix_spawn_file_actions_adddup2(&actions, pipe_fd[1], STDERR_FILENO);
+    posix_spawn_file_actions_addclose(&actions, pipe_fd[0]);
+    posix_spawn_file_actions_addclose(&actions, pipe_fd[1]);
+
+    pid_t pid = 0;
+    int status = posix_spawnp(&pid, "hyprctl", &actions, nullptr, argv.data(), environ);
+    posix_spawn_file_actions_destroy(&actions);
+    ::close(pipe_fd[1]);
+
+    if (status != 0) {
+        ::close(pipe_fd[0]);
+        err_out = "posix_spawnp failed: " + std::string(::strerror(status));
+        return false;
+    }
+
+    char buf[256];
+    ssize_t n = ::read(pipe_fd[0], buf, sizeof(buf) - 1);
+    if (n > 0) {
+        buf[n] = '\0';
+        err_out = buf;
+    }
+    ::close(pipe_fd[0]);
+
+    int wait_status = 0;
+    if (::waitpid(pid, &wait_status, 0) == -1) {
+        err_out += " waitpid failed";
+        return false;
+    }
+
+    return WIFEXITED(wait_status) && WEXITSTATUS(wait_status) == 0;
 }
 
 void configure_hyprland_overlay_rules(const std::string& window_class) {
     if (std::getenv("HYPRLAND_INSTANCE_SIGNATURE") == nullptr) return;
 
-    const auto apply_class = [](const std::string& cls) {
-        std::string lua_cmd = "eval hl.window_rule({ match = { class = \"" +
-                              cls + "\" }, no_blur = true, no_focus = true, no_initial_focus = true })";
+    const auto apply_rule = [](const std::string& rule_args) {
         std::string reply;
-        if (send_hyprland_command(lua_cmd, reply) && reply.find("ok") != std::string::npos) {
-            return;
+        // 1. Direct UNIX socket IPC
+        if (send_hyprland_socket_command("keyword windowrulev2 " + rule_args, reply)) {
+            if (reply.find("ok") != std::string::npos || reply.empty()) {
+                log_info("hyprland ipc: applied windowrulev2 " + rule_args);
+                return true;
+            }
+            log_warn("hyprland ipc: rule '" + rule_args + "' rejected: " + reply);
         }
 
-        const std::string conf_rules[] = {
-            "keyword windowrulev2 noblur,class:^(" + cls + ")$",
-            "keyword windowrulev2 nofocus,class:^(" + cls + ")$",
-            "keyword windowrulev2 noinitialfocus,class:^(" + cls + ")$"
-        };
-        for (const auto& r : conf_rules) {
-            std::string r_reply;
-            if (!send_hyprland_command(r, r_reply)) {
-                log_warn("hyprland ipc: failed to apply rule '" + r + "'");
-            }
+        // 2. Fallback: posix_spawn hyprctl with return code verification
+        std::string spawn_err;
+        if (run_hyprctl_spawn({"keyword", "windowrulev2", rule_args}, spawn_err)) {
+            log_info("hyprland posix_spawn: applied windowrulev2 " + rule_args);
+            return true;
         }
+
+        log_warn("hyprland: failed to apply rule '" + rule_args + "': " + spawn_err);
+        return false;
+    };
+
+    const auto apply_class = [&](const std::string& cls) {
+        apply_rule("noblur,class:^(" + cls + ")$");
+        apply_rule("nofocus,class:^(" + cls + ")$");
+        apply_rule("noinitialfocus,class:^(" + cls + ")$");
     };
 
     apply_class(window_class);
