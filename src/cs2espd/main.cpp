@@ -31,7 +31,6 @@ namespace {
 
 [[maybe_unused]] volatile const char* g_salt_anchor = cs2esp::kBuildSalt;
 
-// Разрешает сокет-путь относительно config-файла, если он относительный (для абстрактных сокетов возвращает как есть)
 std::string resolve_socket_path(const std::string& path, const std::string& cfg_path) {
     if (path.empty() || path[0] == '/' || path[0] == '@') return path;
     try {
@@ -43,16 +42,12 @@ std::string resolve_socket_path(const std::string& path, const std::string& cfg_
 }
 
 void apply_stealth_hardening(int argc, char** argv, const std::string& spoof_name) {
-    // 1. Блокируем чтение памяти демона другими процессами пользователя (VAC scanner)
-    // и запрещаем ptrace attach (Dumpable: 0 в /proc/<pid>/status)
+    // Disable ptrace attach and core dumps (Dumpable: 0 in /proc/<pid>/status).
     ::prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);
 
     const std::string name = spoof_name.empty() ? "pipewire-sys" : spoof_name;
-
-    // 2. Маскируем имя процесса в /proc/<pid>/comm под системный процесс
     ::prctl(PR_SET_NAME, name.c_str(), 0, 0, 0);
 
-    // 3. Полностью затираем оригинальные аргументы командной строки в /proc/<pid>/cmdline
     if (argc > 0 && argv && argv[0]) {
         char* start = argv[0];
         char* end = argv[argc - 1] + std::strlen(argv[argc - 1]);
