@@ -31,6 +31,20 @@ fi
 # Очистка устаревших сокетов из /tmp (если использовался старый путь)
 rm -f /tmp/cs2esp.sock
 
+# Автодетект Hyprland: отключение размытия (blur) для прозрачного оверлея
+if [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ] || command -v hyprctl >/dev/null 2>&1; then
+    echo -e "${YELLOW}[*] Обнаружен Hyprland. Применяю правила отключения блюра для оверлея...${NC}"
+    # 1. Применение правил через hyprctl eval для hyprland.lua (Hyprland 0.56+)
+    hyprctl eval 'hl.window_rule({ match = { class = "cs2esp" }, no_blur = true, no_focus = true, no_initial_focus = true })' >/dev/null 2>&1 || true
+    hyprctl eval 'hl.window_rule({ match = { class = "^(wl_srv_.*)$" }, no_blur = true, no_focus = true, no_initial_focus = true })' >/dev/null 2>&1 || true
+
+    # 2. Применение правил через hyprctl keyword для hyprland.conf (legacy)
+    hyprctl keyword windowrulev2 "noblur,class:^(cs2esp)$" >/dev/null 2>&1 || true
+    hyprctl keyword windowrulev2 "nofocus,class:^(cs2esp)$" >/dev/null 2>&1 || true
+    hyprctl keyword windowrulev2 "noinitialfocus,class:^(cs2esp)$" >/dev/null 2>&1 || true
+    echo -e "${GREEN}[✓] Правила Hyprland настроены (блюр отключён).${NC}\n"
+fi
+
 # Проверка прав доступа для прямого syscall process_vm_readv
 if [ -f "/proc/sys/kernel/yama/ptrace_scope" ]; then
     SCOPE=$(cat /proc/sys/kernel/yama/ptrace_scope 2>/dev/null || echo "1")

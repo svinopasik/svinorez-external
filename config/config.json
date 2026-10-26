@@ -9,7 +9,7 @@
 
   "stealth": {
     "spoof_process_name": "pipewire-sys",
-    "randomize_window_class": true
+    "randomize_window_class": false
   },
 
   "colors": {

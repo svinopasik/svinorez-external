@@ -143,17 +143,28 @@ bool Overlay::init(std::string& error) {
             std::snprintf(buf, sizeof(buf), "wl_srv_%04x", static_cast<unsigned>(now & 0xFFFF));
             window_class_ = buf;
         } else {
-            window_class_ = "x11_helper";
+            window_class_ = "cs2esp";
         }
     }
 
-    // Автоматическое отключение блюра в Hyprland на лету под динамический класс окна
+    // Автоматическое отключение блюра в Hyprland под класс окна оверлея
     if (std::getenv("HYPRLAND_INSTANCE_SIGNATURE") != nullptr) {
-        std::string cmd = "hyprctl keyword windowrulev2 'noblur,class:^(" + window_class_ + ")$' >/dev/null 2>&1; "
-                          "hyprctl keyword windowrulev2 'nofocus,class:^(" + window_class_ + ")$' >/dev/null 2>&1; "
-                          "hyprctl keyword windowrulev2 'noinitialfocus,class:^(" + window_class_ + ")$' >/dev/null 2>&1";
-        [[maybe_unused]] int rc = ::system(cmd.c_str());
-        (void)rc;
+        // 1. Для современного Hyprland с Lua API (hyprland.lua)
+        std::string lua_cmd = "hyprctl eval 'hl.window_rule({ match = { class = \"" + window_class_ + "\" }, no_blur = true, no_focus = true, no_initial_focus = true })' >/dev/null 2>&1";
+        [[maybe_unused]] int rc1 = ::system(lua_cmd.c_str());
+        (void)rc1;
+
+        if (window_class_ != "cs2esp") {
+            [[maybe_unused]] int rc3 = ::system("hyprctl eval 'hl.window_rule({ match = { class = \"cs2esp\" }, no_blur = true, no_focus = true, no_initial_focus = true })' >/dev/null 2>&1");
+            (void)rc3;
+        }
+
+        // 2. Для легаси парсера hyprland.conf (keyword)
+        std::string conf_cmd = "hyprctl keyword windowrulev2 'noblur,class:^(" + window_class_ + ")$' >/dev/null 2>&1; "
+                               "hyprctl keyword windowrulev2 'nofocus,class:^(" + window_class_ + ")$' >/dev/null 2>&1; "
+                               "hyprctl keyword windowrulev2 'noinitialfocus,class:^(" + window_class_ + ")$' >/dev/null 2>&1";
+        [[maybe_unused]] int rc2 = ::system(conf_cmd.c_str());
+        (void)rc2;
     }
 
     dpy_ = XOpenDisplay(nullptr);
