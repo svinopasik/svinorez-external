@@ -15,17 +15,19 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# Генерация уникальной соли сборки (полиморфизм хэша бинарника)
+# Build salt embedded into .rodata to produce distinct binary SHA256 hashes
+# between builds. This prevents naive static file hash matching (not an anti-cheat bypass).
 string(RANDOM LENGTH 64 ALPHABET "0123456789abcdef" BUILD_SALT)
 string(TIMESTAMP BUILD_TIME "%Y%m%d%H%M%S")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/build_salt.hpp"
     "#pragma once\nnamespace cs2esp {\ninline volatile const char kBuildSalt[] = \"${BUILD_SALT}_${BUILD_TIME}\";\n}\n")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 
-# Флаги оптимизации, скрытия символов и защиты
+# Compilation flags
 add_compile_options(
     -Wall
     -Wextra
+    -Wpedantic
     -O3
     -fvisibility=hidden
     -fvisibility-inlines-hidden
@@ -59,7 +61,7 @@ add_library(cs2esp_common STATIC
 )
 target_include_directories(cs2esp_common PUBLIC include ${X11_INCLUDE_DIR})
 target_link_libraries(cs2esp_common PUBLIC ${X11_X11_LIB})
-target_compile_options(cs2esp_common PRIVATE -Wall -Wextra)
+target_compile_options(cs2esp_common PRIVATE -Wall -Wextra -Wpedantic)
 
 add_executable(cs2espd
     src/cs2espd/main.cpp
